@@ -20,4 +20,10 @@ adb -s %1 install -r webkiosk.apk
 adb -s %1 push webkiosk.properties /sdcard/webkiosk.properties
 adb -s %1 shell dpm set-device-owner nl.webkiosk/.AdminReceiver || echo !! Device owner mislukt op %1: verwijder eerst alle accounts of doe een fabrieksreset.
 adb -s %1 shell am start -n nl.webkiosk/.MainActivity
+findstr /R /C:"^wifi\.[0-9]*\.password=." webkiosk.properties >nul && (
+  REM wifi-wachtwoorden niet op de opslag laten staan: de app heeft ze dan al overgenomen
+  timeout /t 10 /nobreak >nul
+  adb -s %1 shell rm -f /sdcard/webkiosk.properties
+  echo    config met wifi-wachtwoorden weer van het toestel verwijderd
+)
 goto :eof

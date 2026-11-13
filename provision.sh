@@ -19,5 +19,11 @@ for S in $DEVICES; do
   adb -s "$S" shell dpm set-device-owner nl.webkiosk/.AdminReceiver \
     || echo "!! Device owner mislukt op $S: verwijder eerst alle accounts (Instellingen > Accounts) of doe een fabrieksreset."
   adb -s "$S" shell am start -n nl.webkiosk/.MainActivity
+  if grep -qE '^wifi\.[0-9]+\.password=.' "$CFG"; then
+    # wifi-wachtwoorden niet op de opslag laten staan: de app heeft ze dan al overgenomen
+    sleep 10
+    adb -s "$S" shell rm -f /sdcard/webkiosk.properties
+    echo "   config met wifi-wachtwoorden weer van het toestel verwijderd"
+  fi
 done
 echo "Klaar."

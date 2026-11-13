@@ -95,6 +95,27 @@ Werkt het op een toestel toch niet goed:
 - Met het scherm uit leest Android nooit NFC. Wil je dat het scherm aan blijft: `keep_screen_on=true` (standaard uit).
 
 
+## Wifi-profielen
+Zet netwerken in `webkiosk.properties`; de app (als device owner) zet ze in Android:
+```properties
+wifi.1.ssid=EventVOX-Ingang
+wifi.1.password=geheimwachtwoord
+wifi.1.security=WPA        # WPA (WPA/WPA2-Personal, standaard), WEP of OPEN
+wifi.1.hidden=false        # true voor een verborgen netwerk
+wifi.1.priority=10         # hoger = eerder kiezen
+wifi.2.ssid=Festival-Backup
+wifi.2.password=anderwachtwoord
+wifi_remove_others=false   # true: alle andere opgeslagen netwerken verwijderen
+wifi_lockdown=false        # true: gebruikers kunnen deze netwerken niet wijzigen of vergeten
+```
+- Tot 20 netwerken. Een netwerk met dezelfde naam wordt bijgewerkt (bv. nieuw wachtwoord); een netwerk dat de app eerder
+  zette en niet meer in het bestand staat, wordt verwijderd.
+- Toegepast bij het inrichten en telkens als er een **gewijzigd** bestand op het toestel wordt gezet (provision-script of StageNow).
+- Bedrijfsnetwerken met gebruikersnaam (WPA2-Enterprise/802.1X) worden niet ondersteund.
+- De wachtwoorden staan leesbaar in het bestand. Het provision-script haalt het bestand daarom na 10 seconden weer van
+  het toestel; de app heeft de instellingen dan al opgeslagen. Zet het bestand niet met echte wachtwoorden in Git.
+- Status: beheermenu > Overige instellingen > Wifi-instellingen toont welke profielen de app heeft gezet.
+
 ## Serienummer in de URL
 Standaard-URL: `https://eventvox.nl/scanterminal?serial={serial}`
 `{serial}` wordt vervangen door het serienummer van het toestel (`{model}` door het model). Eindigt de URL op `serial=`,

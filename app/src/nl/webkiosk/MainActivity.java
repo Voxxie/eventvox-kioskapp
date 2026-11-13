@@ -219,6 +219,7 @@ public class MainActivity extends Activity {
             String r = p.getProperty("reload_minutes");
             if (r != null) try { e.putInt("reload_minutes", Integer.parseInt(r.trim())); } catch (NumberFormatException ignored) {}
             e.apply();
+            if (WifiProfiles.mentioned(p)) applyWifi(p);
             return;
         }
     }
@@ -434,6 +435,30 @@ public class MainActivity extends Activity {
     @Override public void onBackPressed() {
         if (web.canGoBack()) web.goBack();
         // anders: niets doen, app kan niet via terug-knop worden verlaten
+    }
+
+    // ---------- wifi-profielen ----------
+
+    /** Wifi-profielen uit het config-bestand zetten (alleen als device owner; alleen bij een gewijzigd bestand). */
+    private void applyWifi(final Properties p) {
+        if (!isOwner()) {
+            // stempel weg: bij de volgende start (als device owner) wordt het bestand opnieuw gelezen
+            prefs.edit().putString("wifi_result", "niet gezet: app is geen device owner").remove("cfg_stamp").apply();
+            return;
+        }
+        final java.util.List<WifiProfiles.Profile> list = WifiProfiles.parse(p);
+        final boolean removeOthers = Boolean.parseBoolean(p.getProperty("wifi_remove_others", "false").trim());
+        final boolean lockdown = Boolean.parseBoolean(p.getProperty("wifi_lockdown", "false").trim());
+        new Thread(new Runnable() { public void run() {
+            java.util.Set<String> previous = prefs.getStringSet("wifi_ssids", new java.util.HashSet<String>());
+            java.util.Set<String> applied = new java.util.HashSet<>();
+            String result;
+            try { result = WifiProfiles.apply(MainActivity.this, list, previous, removeOthers, applied); }
+            catch (Exception ex) { result = "fout: " + ex.getMessage(); }
+            WifiProfiles.lockdown(MainActivity.this, dpm, admin, lockdown);
+            prefs.edit().putStringSet("wifi_ssids", applied)
+                .putString("wifi_result", result + " (" + new java.text.SimpleDateFormat("d-M HH:mm").format(new java.util.Date()) + ")").apply();
+        }}).start();
     }
 
     // ---------- NFC ----------
@@ -937,7 +962,7 @@ public class MainActivity extends Activity {
             "Scherm altijd aan: " + onOff(prefs.getBoolean("keep_screen_on", false)),
             "Automatisch herladen: " + (reload > 0 ? "elke " + reload + " min" : "uit"),
             "SSL-fouten negeren: " + onOff(prefs.getBoolean("ignore_ssl_errors", false)),
-            "Wifi-instellingen"
+            "Wifi-instellingen\n" + wifiStatus()
         };
         list("Overige instellingen", items, new Choice() {
             public void chosen(int w) {
@@ -966,6 +991,13 @@ public class MainActivity extends Activity {
                 }
             }
         }, new Runnable() { public void run() { adminMenu(); } });
+    }
+
+    private String wifiStatus() {
+        java.util.Set<String> ssids = prefs.getStringSet("wifi_ssids", null);
+        String r = prefs.getString("wifi_result", "");
+        if (ssids == null || ssids.isEmpty()) return r.isEmpty() ? "geen profielen uit config" : "profielen: " + r;
+        return "profielen: " + android.text.TextUtils.join(", ", new java.util.TreeSet<>(ssids)) + (r.isEmpty() ? "" : " · " + r);
     }
 
     private void confirm(String title, String msg, final Runnable yes) {
