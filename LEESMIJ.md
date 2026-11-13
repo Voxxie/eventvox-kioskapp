@@ -109,3 +109,25 @@ JSON.parse(WebKiosk.getDeviceInfo());    // { serial, model, manufacturer, andro
 
 ## Opnieuw bouwen
 `sudo apt install aapt apksigner zipalign android-sdk-platform-23 dalvik-exchange default-jdk && ./build.sh`
+
+## Releases (APK automatisch bouwen op GitHub)
+Bij elke **gepubliceerde release** bouwt GitHub Actions (`.github/workflows/release.yml`) een ondertekende APK
+en hangt die aan de release: `webkiosk-<versie>.apk`, `webkiosk.apk`, een SHA-256 en een zip met APK + scripts + config.
+
+**Eenmalig instellen** (Settings > Secrets and variables > Actions > *New repository secret*):
+
+| Secret | Waarde |
+|---|---|
+| `KEYSTORE_BASE64` | de keystore als base64 (zie hieronder) |
+| `KEYSTORE_PASSWORD` | `webkiosk` (wachtwoord van de huidige keystore) |
+
+Keystore naar base64:
+- Windows (PowerShell): `[Convert]::ToBase64String([IO.File]::ReadAllBytes("webkiosk.keystore")) | Set-Clipboard`
+- Mac/Linux: `base64 -w0 webkiosk.keystore` (Mac: `base64 -i webkiosk.keystore`)
+
+Gebruik altijd **dezelfde** keystore: met een andere sleutel kan de app niet over bestaande installaties heen worden bijgewerkt.
+
+**Release maken:** Releases > *Draft a new release* > tag `v1.4.0` > *Publish*. Na ±1 minuut staat de APK bij de release.
+- Tag-formaat `vMAJOR.MINOR.PATCH`; versionCode wordt `MAJOR*10000 + MINOR*100 + PATCH` (v1.4.0 → 10400),
+  dus elke nieuwe tag moet hoger zijn dan de vorige.
+- Testen zonder release: Actions > *Release APK* > *Run workflow*; de APK staat dan onder *Artifacts*.
