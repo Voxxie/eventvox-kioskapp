@@ -87,6 +87,8 @@ public class MainActivity extends Activity {
         web = new WebView(this);
         web.setBackgroundColor(Color.WHITE);
         WebSettings s = web.getSettings();
+        // Naam + versie in de user agent: de EventVOX-backend bewaart die per terminal (Kiosk-app op de terminalpagina)
+        s.setUserAgentString(s.getUserAgentString() + " EventVOX-Webkiosk/" + appVersion());
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
@@ -219,12 +221,12 @@ public class MainActivity extends Activity {
 
     private String homeUrl() { return prefs.getString("url", DEFAULT_URL); }
 
-    /** URL met {serial}/{model} ingevuld; eindigt de URL op "serial=" dan wordt het serienummer erachter gezet. */
+    /** URL met {serial}/{model}/{version} ingevuld; eindigt de URL op "serial=" dan wordt het serienummer erachter gezet. */
     private String resolvedUrl() {
         String u = homeUrl();
         String sn = Uri.encode(serial());
         if (u.endsWith("serial=")) u = u + sn;
-        return u.replace("{serial}", sn).replace("{model}", Uri.encode(Build.MODEL));
+        return u.replace("{serial}", sn).replace("{model}", Uri.encode(Build.MODEL)).replace("{version}", Uri.encode(appVersion()));
     }
 
     @SuppressWarnings({"deprecation", "MissingPermission"})
@@ -623,12 +625,13 @@ public class MainActivity extends Activity {
         return u.isEmpty() ? Updater.DEFAULT_URL : u;
     }
 
+    /** Bij het starten (1 minuut erna) en, alleen als update_check_hours > 0, daarna periodiek. */
     private final Runnable updateCheck = new Runnable() {
         public void run() {
             handler.removeCallbacks(updateCheck);
-            int hours = prefs.getInt("update_check_hours", 6);
+            int hours = prefs.getInt("update_check_hours", 0);
             if (hours > 0) handler.postDelayed(updateCheck, hours * 3600000L);
-            if (hours > 0 && prefs.getBoolean("auto_update", true)) checkForUpdate(false);
+            if (prefs.getBoolean("auto_update", true)) checkForUpdate(false);
         }
     };
 
@@ -707,11 +710,11 @@ public class MainActivity extends Activity {
         long last = prefs.getLong("update_last_check", 0);
         String lastTxt = last == 0 ? "nog niet" : new java.text.SimpleDateFormat("d-M HH:mm").format(new java.util.Date(last))
             + " (" + prefs.getString("update_last_result", "") + ")";
-        int hours = prefs.getInt("update_check_hours", 6);
+        int hours = prefs.getInt("update_check_hours", 0);
         String[] items = {
             "Nu controleren op updates\nHuidige versie " + appVersion() + " · laatst: " + lastTxt,
             "Automatisch bijwerken: " + onOff(prefs.getBoolean("auto_update", true)),
-            "Controleren elke: " + (hours > 0 ? hours + " uur" : "uit"),
+            "Ook periodiek controleren: " + (hours > 0 ? "elke " + hours + " uur" : "nee (alleen bij start en handmatig)"),
             "Update-adres\n" + updateUrl()
         };
         list("Updates", items, new Choice() {
@@ -719,11 +722,13 @@ public class MainActivity extends Activity {
                 switch (w) {
                     case 0: toast("Controleren…"); checkForUpdate(true); break;
                     case 1: prefs.edit().putBoolean("auto_update", !prefs.getBoolean("auto_update", true)).apply(); updateMenu(); break;
-                    case 2: input("Elke X uur controleren (0 = uit)", String.valueOf(prefs.getInt("update_check_hours", 6)), InputType.TYPE_CLASS_NUMBER,
+                    case 2: input("Daarnaast elke X uur controleren (0 = alleen bij start)", String.valueOf(prefs.getInt("update_check_hours", 0)), InputType.TYPE_CLASS_NUMBER,
                             new Choice() { public void chosen(int x) {
                                 try { prefs.edit().putInt("update_check_hours", Math.max(0, Integer.parseInt(inputValue))).apply(); }
                                 catch (NumberFormatException e) { toast("Ongeldig getal"); }
-                                handler.removeCallbacks(updateCheck); handler.postDelayed(updateCheck, 60000);
+                                handler.removeCallbacks(updateCheck);
+                                int h = prefs.getInt("update_check_hours", 0);
+                                if (h > 0) handler.postDelayed(updateCheck, h * 3600000L);
                                 updateMenu(); } }, self); break;
                     case 3: input("Update-adres (leeg = standaard)", prefs.getString("update_url", ""), InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI,
                             new Choice() { public void chosen(int x) { prefs.edit().putString("update_url", inputValue).apply(); updateMenu(); } }, self); break;

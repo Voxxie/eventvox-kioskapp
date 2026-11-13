@@ -100,6 +100,12 @@ Standaard-URL: `https://eventvox.nl/scanterminal?serial={serial}`
 `{serial}` wordt vervangen door het serienummer van het toestel (`{model}` door het model). Eindigt de URL op `serial=`,
 dan wordt het serienummer er ook automatisch achter gezet. Het serienummer staat bovenaan in het beheermenu.
 
+## App-versie zichtbaar in EventVOX
+De app zet `EventVOX-Webkiosk/<versie>` achter de user agent van de browser. De EventVOX-backend bewaart de user agent
+bij elke heartbeat van een terminal; de terminalpagina in EventVOX toont daaruit de regel **Kiosk-app**
+(bv. *EventVOX-Webkiosk 1.4.0*). Wil je de versie ook in de URL: gebruik `{version}`, bv.
+`https://eventvox.nl/scanterminal?serial={serial}&app={version}`.
+
 ## JavaScript: batterij en toestel
 ```js
 // Standaard Battery API (werkt altijd; is de WebView te oud, dan levert de app hem zelf)
@@ -130,7 +136,8 @@ JSON.parse(WebKiosk.getDeviceInfo());    // { serial, model, manufacturer, andro
 
 ## Automatische updates
 Bij elke release maakt de workflow ook een `update.json` (versie, download-URL, SHA-256, release-notes).
-De app controleert die **elke 6 uur** (en 1 minuut na het starten). Is er een nieuwere versie, dan:
+De app controleert die **1 minuut na het starten** en wanneer je in het beheermenu op *Nu controleren* tikt
+(periodiek kan ook: `update_check_hours`). Is er een nieuwere versie, dan:
 - downloadt hij de APK en controleert de SHA-256;
 - wacht hij tot het toestel **2 minuten niet is aangeraakt** (geen update midden in een scan);
 - installeert hij **stil** (als device owner) en start daarna vanzelf opnieuw op.
