@@ -47,7 +47,7 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::Secret KEYSTORE_BASE64 ontbreekt. Zie LEESMIJ.md > Releases."; exit 1
+            echo "::error::Secret KEYSTORE_BASE64 ontbreekt. Zie README.md > Releases."; exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/webkiosk.keystore"
 
@@ -65,7 +65,7 @@ jobs:
           mkdir -p dist
           ./build.sh
           rm -f "$KEYSTORE"
-          cp webkiosk.properties provision.sh provision.bat nfc-test.html LEESMIJ.md dist/
+          cp webkiosk.properties provision.sh provision.bat nfc-test.html README.md dist/
           (cd dist && zip -q "../webkiosk-${VERSION_NAME}.zip" * && sha256sum webkiosk.apk > webkiosk.apk.sha256)
 
       - name: Aan release hangen
