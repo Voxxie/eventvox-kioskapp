@@ -3,8 +3,8 @@
 # Vereist (Debian/Ubuntu): apt install aapt apksigner zipalign android-sdk-platform-23 dalvik-exchange default-jdk
 #
 # Optionele omgevingsvariabelen:
-#   VERSION_NAME   bv. 1.4.0      (standaard: uit AndroidManifest.xml)
-#   VERSION_CODE   bv. 10400      (standaard: uit AndroidManifest.xml)
+#   VERSION_NAME   bv. 0.0.1      (standaard: 0.0.0-dev uit AndroidManifest.xml)
+#   VERSION_CODE   bv. 1          (standaard: 0 uit AndroidManifest.xml)
 #   KEYSTORE       pad naar keystore (standaard: webkiosk.keystore in de repo-map)
 #   KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD   (standaard: webkiosk)
 #   OUTPUT         pad van de APK (standaard: webkiosk.apk in de repo-map)

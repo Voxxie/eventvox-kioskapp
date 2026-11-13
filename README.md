@@ -124,7 +124,7 @@ dan wordt het serienummer er ook automatisch achter gezet. Het serienummer staat
 ## App-versie zichtbaar in EventVOX
 De app zet `EventVOX-Webkiosk/<versie>` achter de user agent van de browser. De EventVOX-backend bewaart de user agent
 bij elke heartbeat van een terminal; de terminalpagina in EventVOX toont daaruit de regel **Kiosk-app**
-(bv. *EventVOX-Webkiosk 1.4.0*). Wil je de versie ook in de URL: gebruik `{version}`, bv.
+(bv. *EventVOX-Webkiosk 0.0.1*). Wil je de versie ook in de URL: gebruik `{version}`, bv.
 `https://eventvox.nl/scanterminal?serial={serial}&app={version}`.
 
 ## JavaScript: batterij en toestel
@@ -190,7 +190,9 @@ Keystore naar base64:
 
 Gebruik altijd **dezelfde** keystore: met een andere sleutel kan de app niet over bestaande installaties heen worden bijgewerkt.
 
-**Release maken:** Releases > *Draft a new release* > tag `v1.4.0` > *Publish*. Na ±1 minuut staat de APK bij de release.
-- Tag-formaat `vMAJOR.MINOR.PATCH`; versionCode wordt `MAJOR*10000 + MINOR*100 + PATCH` (v1.4.0 → 10400),
-  dus elke nieuwe tag moet hoger zijn dan de vorige.
+**Release maken:** Releases > *Draft a new release* > tag `v0.0.1` > *Publish*. Na ±1 minuut staat de APK bij de release.
+- Tag-formaat `vMAJOR.MINOR.PATCH` (MINOR en PATCH 0–99); versionCode wordt `MAJOR*10000 + MINOR*100 + PATCH`
+  (v0.0.1 → 1, v0.1.0 → 100, v1.0.0 → 10000), dus elke nieuwe tag moet hoger zijn dan de vorige.
+- Een lokaal gebouwde APK (`./build.sh` zonder versie) heeft versie `0.0.0-dev` (versionCode 0): elke release is
+  daar een update van, ook v0.0.1.
 - Testen zonder release: Actions > *Release APK* > *Run workflow*; de APK staat dan onder *Artifacts*.
