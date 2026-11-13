@@ -9,6 +9,7 @@ CFG=webkiosk.properties
 if [ -n "$URL" ]; then
   sed "s|^url=.*|url=$URL|" webkiosk.properties > /tmp/webkiosk.properties.$$ && CFG=/tmp/webkiosk.properties.$$
 fi
+[ -f webkiosk.apk ] || { echo "webkiosk.apk ontbreekt: download hem bij de nieuwste release op GitHub."; exit 1; }
 DEVICES=$(adb devices | awk 'NR>1 && $2=="device"{print $1}')
 [ -z "$DEVICES" ] && { echo "Geen toestellen gevonden (USB-foutopsporing aan?)"; exit 1; }
 for S in $DEVICES; do

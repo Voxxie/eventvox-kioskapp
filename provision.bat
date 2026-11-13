@@ -2,6 +2,11 @@
 REM Richt ALLE via USB aangesloten toestellen in als WebKiosk.
 REM Vereist adb (Android platform-tools) in PATH of in deze map.
 cd /d "%~dp0"
+if not exist webkiosk.apk (
+  echo webkiosk.apk ontbreekt: download hem bij de nieuwste release op GitHub.
+  pause
+  exit /b 1
+)
 for /f "skip=1 tokens=1,2" %%a in ('adb devices') do (
   if "%%b"=="device" call :setup %%a
 )

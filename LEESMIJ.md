@@ -6,7 +6,7 @@ en is (als *device owner*) niet te verlaten door de gebruiker. Geen licenties of
 ## Bestanden
 | Bestand | Doel |
 |---|---|
-| `webkiosk.apk` | De app (Android 5+; TC51 = Android 6/7/8) |
+| `webkiosk.apk` | De app (Android 5+; TC51 = Android 6/7/8). Staat **niet** in de repo: download hem bij de [nieuwste release](../../releases/latest) |
 | `webkiosk.properties` | Configuratie: URL, PIN, scherm-aan, auto-herladen |
 | `provision.bat` / `provision.sh` | Richt in één keer alle via USB aangesloten toestellen in |
 | `app/`, `build.sh` | Broncode + buildscript (Java, geen Android Studio nodig) |
@@ -18,6 +18,7 @@ en is (als *device owner*) niet te verlaten door de gebruiker. Geen licenties of
 3. Instellingen > Over de telefoon > 7x op *Build-nummer* tikken → Ontwikkelaarsopties → **USB-foutopsporing** aan.
 
 ## Inrichten (meerdere tegelijk)
+0. Download `webkiosk-<versie>.zip` bij de [nieuwste release](../../releases/latest) en pak hem uit (bevat APK, scripts en config).
 1. Controleer de URL in `webkiosk.properties` (standaard eventvox scanterminal met serienummer).
 2. Sluit de toestellen aan via USB (USB-hub of cradle) en accepteer de foutopsporingsvraag op elk toestel.
 3. Windows: dubbelklik `provision.bat` (adb uit Google *platform-tools* moet in PATH of in de map staan).

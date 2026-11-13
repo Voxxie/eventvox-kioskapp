@@ -1,5 +1,7 @@
 app/build/
 *.zip
 *.idsig
+# APK komt uit GitHub-releases, niet uit de repo
+*.apk
 # ondertekeningssleutel niet in git: apart en veilig bewaren
 *.keystore
