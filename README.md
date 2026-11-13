@@ -1,7 +1,12 @@
-# WebKiosk voor Zebra TC51 (gratis, open)
+# EventVOX-Webkiosk voor Zebra TC51
+
+<img src="app/res/mipmap-xxxhdpi/ic_launcher.png" width="96" alt="EventVOX">
 
 Eigen kiosk-browser: opent één website fullscreen, zonder statusbalk/navigatieknoppen,
 en is (als *device owner*) niet te verlaten door de gebruiker. Geen licenties of betaalde diensten.
+
+> Pakketnaam blijft `nl.webkiosk` en de JavaScript-koppeling heet `WebKiosk` (events `webkiosk-nfc`, `webkiosk-battery`),
+> zodat bestaande installaties en websites blijven werken.
 
 ## Bestanden
 | Bestand | Doel |
@@ -36,7 +41,7 @@ Tik **10x snel op dezelfde plek** op het scherm (maximaal ~0,7 s tussen de tikke
   Enter na typen aan/uit, **NFC testen** (toont direct wat een tag oplevert), NFC in Android aan/uit
 - **Overige instellingen**: PIN wijzigen, aantal tikken (5–20), scherm altijd aan, automatisch herladen, SSL-fouten negeren, wifi-instellingen
 - **Pagina herladen** / **Cache en cookies wissen**
-- **App sluiten**: naar de Android-instellingen; open WebKiosk opnieuw of herstart om terug te gaan
+- **App sluiten**: naar de Android-instellingen; open EventVOX-Webkiosk opnieuw of herstart om terug te gaan
 - **Kiosk-modus definitief uitschakelen**: toestel wordt weer normaal Android (opnieuw inrichten via provision-script)
 
 Instellingen uit het menu blijven bewaard. Een **nieuw of gewijzigd** `webkiosk.properties`-bestand overschrijft ze bij de volgende start;
@@ -51,7 +56,7 @@ een ongewijzigd bestand niet.
 Met Zebra StageNow (gratis) kun je via één barcode-scan de APK en `webkiosk.properties` laten downloaden en installeren
 (FileMgr + AppMgr). Zet de app dan als launcher (hij registreert zich als *Home*-app). Het harde slot (device owner)
 kan StageNow niet zetten; daarvoor is de eenmalige adb-stap nodig. Alternatief voor de vergrendeling zonder adb: Zebra
-**Enterprise Home Screen** (ook gratis) met WebKiosk als enige toegestane app.
+**Enterprise Home Screen** (ook gratis) met EventVOX-Webkiosk als enige toegestane app.
 
 ## Barcodescanner
 DataWedge staat standaard aan: een scan wordt als toetsaanslagen in het actieve invoerveld van de website getypt.

@@ -613,7 +613,7 @@ public class MainActivity extends Activity {
             "App sluiten (naar Android-instellingen)",
             "Kiosk-modus definitief uitschakelen"
         };
-        list("WebKiosk " + appVersion() + " · SN " + serial() + (isOwner() ? "" : " · geen device owner"), items, new Choice() {
+        list("EventVOX-Webkiosk " + appVersion() + " · SN " + serial() + (isOwner() ? "" : " · geen device owner"), items, new Choice() {
             public void chosen(int w) {
                 switch (w) {
                     case 0: editUrl(); break;
@@ -623,7 +623,7 @@ public class MainActivity extends Activity {
                     case 4: web.clearCache(true); CookieManager.getInstance().removeAllCookies(null);
                             WebStorage.getInstance().deleteAllData(); loadHome();
                             toast("Cache en cookies gewist"); break;
-                    case 5: confirm("App sluiten?", "De kiosk wordt tijdelijk verlaten. Open WebKiosk opnieuw (of herstart het toestel) om terug te gaan.",
+                    case 5: confirm("App sluiten?", "De kiosk wordt tijdelijk verlaten. Open EventVOX-Webkiosk opnieuw (of herstart het toestel) om terug te gaan.",
                                 new Runnable() { public void run() { leaveKiosk(); } }); break;
                     case 6: confirm("Kiosk-modus uitschakelen?", "Het toestel wordt weer een normaal Android-toestel. Opnieuw inrichten kan alleen via het provision-script.",
                                 new Runnable() { public void run() { removeOwner(); } }); break;

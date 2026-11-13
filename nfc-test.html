@@ -3,7 +3,7 @@
 <title>NFC test</title>
 <style>body{font-family:sans-serif;padding:16px}input{font-size:20px;width:100%;padding:8px}pre{background:#eee;padding:8px;white-space:pre-wrap}</style>
 </head><body>
-<h2>WebKiosk NFC-test</h2>
+<h2>EventVOX-Webkiosk NFC-test</h2>
 <p id="status"></p>
 <p>Keyboard-modus (tik eerst in het veld):</p>
 <form onsubmit="event.preventDefault();log('Formulier verstuurd: '+this.code.value);this.code.value='';">
@@ -16,7 +16,7 @@ const out = document.getElementById('out');
 function log(t){ out.textContent = t + '\n\n' + out.textContent; }
 document.getElementById('status').textContent = window.WebKiosk
   ? 'WebKiosk gevonden, NFC ' + (WebKiosk.nfcEnabled() ? 'aan' : 'UIT of niet aanwezig')
-  : 'Niet in WebKiosk geopend';
+  : 'Niet in EventVOX-Webkiosk geopend';
 window.addEventListener('webkiosk-nfc', e => log(JSON.stringify(e.detail, null, 2)));
 </script>
 </body></html>
