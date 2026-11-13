@@ -159,6 +159,7 @@ public class MainActivity extends Activity {
         registerReceiver(wakeReceiver, wf);
 
         setContentView(web);
+        watchSystemBars();
         loadHome();
         schedulePeriodicReload();
         handler.postDelayed(updateCheck, 60000); // eerste controle 1 minuut na start
@@ -386,11 +387,58 @@ public class MainActivity extends Activity {
         catch (Exception ignored) {}
     }
 
+    private static final int IMMERSIVE =
+        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN
+        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
+
     private void hideSystemUi() {
-        getWindow().getDecorView().setSystemUiVisibility(
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN
-            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        getWindow().getDecorView().setSystemUiVisibility(IMMERSIVE);
+    }
+
+    /*
+     * Na het toetsenbord blijft op Android 6-8 de navigatiebalk (met terugknop) staan: het toetsenbord haalt de
+     * immersive-vlaggen weg en Android zet ze niet terug. Daarom: zodra de balken weer zichtbaar worden, of het
+     * toetsenbord dichtgaat, de balken opnieuw verbergen (niet zolang het toetsenbord open is: dan hoort de
+     * balk er te zijn om het toetsenbord te kunnen sluiten).
+     */
+    private boolean keyboardShown = false;
+
+    private final Runnable rehideBars = new Runnable() {
+        public void run() {
+            if (keyboardVisible()) { handler.postDelayed(this, 1000); return; }
+            hideSystemUi();
+        }
+    };
+
+    private boolean keyboardVisible() {
+        View root = getWindow().getDecorView();
+        android.graphics.Rect r = new android.graphics.Rect();
+        root.getWindowVisibleDisplayFrame(r);
+        int screen = root.getRootView().getHeight();
+        return screen > 0 && screen - r.bottom > screen * 0.15;
+    }
+
+    private void watchSystemBars() {
+        final View decor = getWindow().getDecorView();
+        decor.setOnSystemUiVisibilityChangeListener(new View.OnSystemUiVisibilityChangeListener() {
+            public void onSystemUiVisibilityChange(int vis) {
+                if ((vis & View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) == 0 || (vis & View.SYSTEM_UI_FLAG_FULLSCREEN) == 0) {
+                    handler.removeCallbacks(rehideBars);
+                    handler.postDelayed(rehideBars, 1500);
+                }
+            }
+        });
+        decor.getViewTreeObserver().addOnGlobalLayoutListener(new android.view.ViewTreeObserver.OnGlobalLayoutListener() {
+            public void onGlobalLayout() {
+                boolean shown = keyboardVisible();
+                if (keyboardShown && !shown) { // toetsenbord net dicht
+                    handler.removeCallbacks(rehideBars);
+                    handler.postDelayed(rehideBars, 300);
+                }
+                keyboardShown = shown;
+            }
+        });
     }
 
     @Override protected void onResume() {
