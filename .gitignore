@@ -1,0 +1,5 @@
+app/build/
+*.zip
+*.idsig
+# ondertekeningssleutel niet in git: apart en veilig bewaren
+*.keystore

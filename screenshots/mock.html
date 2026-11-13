@@ -1,0 +1,126 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#e9eaee;font-family:Roboto,"Noto Sans",Arial,sans-serif;padding:24px}
+h1{font-size:20px;margin:0 0 4px} .sub{color:#666;font-size:13px;margin-bottom:18px}
+.grid{display:flex;gap:22px;flex-wrap:wrap}
+.cap{font-size:13px;font-weight:600;margin:8px 0 0;text-align:center;width:300px}
+.phone{width:300px;height:533px;background:#111;border-radius:22px;padding:12px;box-sizing:content-box;position:relative}
+.scr{width:300px;height:533px;background:#fff;position:relative;overflow:hidden;border-radius:4px}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.dlg{position:absolute;left:18px;right:18px;top:50%;transform:translateY(-50%);background:#fafafa;border-radius:3px;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:20px 0 8px}
+.dlg h3{font-size:16px;font-weight:500;margin:0 22px 14px;color:#212121}
+.item{padding:9px 22px;font-size:14px;color:#212121}
+.item small{display:block;color:#757575;font-size:12px;margin-top:2px;word-break:break-all}
+.btns{text-align:right;padding:8px 14px 2px}.btn{color:#009688;font-size:13px;font-weight:600;margin-left:16px;text-transform:uppercase}
+.inp{margin:0 22px;border-bottom:2px solid #009688;padding:6px 0;font-size:15px;color:#212121}
+.radio{display:flex;align-items:center;padding:9px 22px;font-size:14px}
+.radio i{width:14px;height:14px;border:2px solid #757575;border-radius:50%;margin-right:16px;flex:none}
+.radio.on i{border-color:#009688;background:radial-gradient(#009688 45%,transparent 50%)}
+.msg{margin:0 22px;font-size:13.5px;color:#424242;line-height:1.55;white-space:pre-line}
+/* website */
+.site{padding:0}.bar{background:#1d2b5a;color:#fff;padding:14px 16px;font-weight:700;font-size:16px;display:flex;justify-content:space-between}
+.bar span{font-weight:400;font-size:12px;opacity:.8}
+.big{margin:40px 16px 0;border:2px dashed #b9c0d4;border-radius:10px;height:150px;display:flex;align-items:center;justify-content:center;color:#5a6688;font-size:14px;text-align:center}
+.field{margin:18px 16px 0;border:1px solid #ccc;border-radius:6px;padding:12px;color:#999;font-size:14px}
+.ok{margin:16px;background:#e8f6ec;border-left:4px solid #2e9e4f;padding:10px 12px;font-size:13px;color:#1e5e31}
+.batt{position:absolute;bottom:12px;left:16px;right:16px;font-size:12px;color:#666;display:flex;justify-content:space-between}
+.tap{position:absolute;width:44px;height:44px;border-radius:50%;background:rgba(0,150,136,.25);border:2px solid #009688;left:200px;top:300px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#00695c;font-size:13px}
+.err{text-align:center;padding:40px 16px;color:#333;overflow-wrap:anywhere}.err h2{font-size:20px}
+</style></head><body>
+<h1>WebKiosk 1.3 op Zebra TC51 – impressie</h1>
+<div class="sub">Nagebootste schermen (geen echte schermafbeeldingen). Kleuren en lettertypen van Android-dialogen kunnen afwijken per firmware.</div>
+<div class="grid">
+
+<div><div class="phone"><div class="scr site">
+  <div class="bar">Scanterminal <span>SN 18123522501234</span></div>
+  <div class="big">Scan een ticket<br>of houd een NFC-pas tegen het toestel</div>
+  <div class="field">Ticketcode…</div>
+  <div class="ok">✔ Ticket geldig – 1 persoon</div>
+  <div class="batt" style="flex-direction:column;gap:4px;word-break:break-all"><span>🔋 87% · laadt op (via navigator.getBattery)</span><span>https://eventvox.nl/scanterminal?serial=18123522501234</span></div>
+  <div class="tap">10×</div>
+</div></div><div class="cap">1. Website fullscreen (voorbeeldpagina) – 10× tikken op dezelfde plek</div></div>
+
+<div><div class="phone"><div class="scr site">
+  <div class="bar">Scanterminal</div><div class="big">&nbsp;</div>
+  <div class="dim"></div>
+  <div class="dlg"><h3>Beheer-PIN</h3><div class="inp">••••</div>
+  <div class="btns"><span class="btn">Annuleren</span><span class="btn">OK</span></div></div>
+</div></div><div class="cap">2. PIN invoeren</div></div>
+
+<div><div class="phone"><div class="scr site">
+  <div class="bar">Scanterminal</div>
+  <div class="dim"></div>
+  <div class="dlg"><h3>WebKiosk 1.3 · SN 18123522501234</h3>
+   <div class="item">Website-adres wijzigen<small>https://eventvox.nl/scanterminal?serial=18123522501234</small></div>
+   <div class="item">NFC-instellingen<small>Typen + JavaScript-event</small></div>
+   <div class="item">Overige instellingen</div>
+   <div class="item">Pagina herladen</div>
+   <div class="item">Cache en cookies wissen</div>
+   <div class="item">App sluiten (naar Android-instellingen)</div>
+   <div class="item">Kiosk-modus definitief uitschakelen</div>
+   <div class="btns"><span class="btn">Sluiten</span></div></div>
+</div></div><div class="cap">3. Beheermenu</div></div>
+
+<div><div class="phone"><div class="scr site">
+  <div class="bar">Scanterminal</div>
+  <div class="dim"></div>
+  <div class="dlg"><h3>Website-adres ({serial} = serienummer)</h3>
+   <div class="inp" style="font-size:13px">https://eventvox.nl/scanterminal?serial={serial}</div>
+   <div class="btns"><span class="btn">Terug</span><span class="btn">Opslaan</span></div></div>
+</div></div><div class="cap">4. Website-adres wijzigen</div></div>
+
+<div><div class="phone"><div class="scr site">
+  <div class="bar">Scanterminal</div>
+  <div class="dim"></div>
+  <div class="dlg"><h3>NFC (hardware: aan)</h3>
+   <div class="item">Modus<small>Typen + JavaScript-event</small></div>
+   <div class="item">Formaat tag-ID<small>Hex (04A1B2C3)</small></div>
+   <div class="item">Wat typen<small>Tag-ID (UID)</small></div>
+   <div class="item">Enter na typen: aan</div>
+   <div class="item">NFC testen</div>
+   <div class="item">NFC in Android aan/uit zetten</div>
+   <div class="btns"><span class="btn">Terug</span></div></div>
+</div></div><div class="cap">5. NFC-instellingen</div></div>
+
+<div><div class="phone"><div class="scr site">
+  <div class="bar">Scanterminal</div>
+  <div class="dim"></div>
+  <div class="dlg"><h3>Formaat tag-ID</h3>
+   <div class="radio on"><i></i>Hex (04A1B2C3)</div>
+   <div class="radio"><i></i>Hex omgekeerd</div>
+   <div class="radio"><i></i>Hex met dubbele punten (04:A1:B2)</div>
+   <div class="radio"><i></i>Decimaal</div>
+   <div class="radio"><i></i>Decimaal omgekeerd</div>
+   <div class="btns"><span class="btn">Terug</span></div></div>
+</div></div><div class="cap">6. Keuze UID-formaat</div></div>
+
+<div><div class="phone"><div class="scr site">
+  <div class="bar">Scanterminal</div>
+  <div class="dim"></div>
+  <div class="dlg"><h3>NFC testen</h3>
+   <div class="msg">Tag-ID: 04A1B2C3D45E80
+Hex: 04A1B2C3D45E80
+Type: ["NfcA","MifareUltralight","Ndef"]
+Inhoud (text): TICKET-55821
+
+Wordt getypt als: 04A1B2C3D45E80</div>
+   <div class="btns"><span class="btn">Terug</span></div></div>
+</div></div><div class="cap">7. NFC testen (voorbeeldtag)</div></div>
+
+<div><div class="phone"><div class="scr site">
+  <div class="bar">Scanterminal</div>
+  <div class="dim"></div>
+  <div class="dlg"><h3>Overige instellingen</h3>
+   <div class="item">Beheer-PIN wijzigen</div>
+   <div class="item">Aantal tikken voor dit menu: 10</div>
+   <div class="item">Scherm altijd aan: aan</div>
+   <div class="item">Automatisch herladen: uit</div>
+   <div class="item">SSL-fouten negeren: uit</div>
+   <div class="item">Wifi-instellingen</div>
+   <div class="btns"><span class="btn">Terug</span></div></div>
+</div></div><div class="cap">8. Overige instellingen</div></div>
+
+<div><div class="phone"><div class="scr">
+  <div class="err"><h2>Geen verbinding</h2><p>De pagina kon niet worden geladen (net::ERR_INTERNET_DISCONNECTED).<br>Opnieuw proberen over 10 seconden…</p></div>
+</div></div><div class="cap">9. Geen netwerk (echte foutpagina van de app)</div></div>
+
+</div></body></html>
