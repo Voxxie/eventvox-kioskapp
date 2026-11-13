@@ -85,6 +85,22 @@
     </div>
 
     <div class="card">
+      <h2><span class="ic">🔦</span>Scanner <span class="pill" id="scan-pill"></span></h2>
+      <label class="lbl">DataWedge</label>
+      <div class="seg" data-setting="datawedge">
+        <button data-v="app">Via de app</button><button data-v="off">Eigen profielen</button>
+      </div>
+      <label class="lbl">Doorgeven aan de website</label>
+      <div class="seg" data-setting="scan_mode">
+        <button data-v="off">Uit</button><button data-v="keyboard">Typen</button><button data-v="event">Event</button><button data-v="both">Beide</button>
+      </div>
+      <div class="test got" id="scan-test" hidden><dl class="kv" id="scan-result"></dl></div>
+      <p class="hint" id="scan-status"></p>
+      <p class="hint">Scan hier iets om te testen: zolang dit scherm open is gaat het niet naar de website.</p>
+      <div class="row"><button class="btn" data-action="dataWedge">Profiel opnieuw instellen</button></div>
+    </div>
+
+    <div class="card">
       <h2><span class="ic">⬇️</span>Updates</h2>
       <div class="big-row"><div><div class="big" id="upd-version"></div><div class="hint" id="upd-last"></div></div>
         <button class="btn primary" data-action="checkUpdate" id="upd-check">Controleren</button></div>

@@ -107,6 +107,13 @@
 
         $('#wifi-status').textContent = s.wifi;
 
+        // Scanner (DataWedge)
+        var sc = s.scanner || {};
+        var spill = $('#scan-pill');
+        spill.textContent = !sc.installed ? 'geen DataWedge' : s.settings.datawedge === 'app' ? 'via de app' : 'eigen profielen';
+        spill.classList.toggle('off', !sc.installed);
+        $('#scan-status').textContent = sc.status || '';
+
         var b = s.battery || {};
         $('#device').innerHTML = [
             ['Serienummer', '<span class="mono">' + esc(s.serial) + '</span>'],
@@ -206,6 +213,10 @@
             var dl = $('#nfc-result');
             dl.innerHTML = rows.map(function (r) { return '<dt>' + esc(r[0]) + '</dt><dd class="mono">' + esc(r[1]) + '</dd>'; }).join('');
             dl.hidden = false;
+        }
+        if (type === 'scan') {
+            $('#scan-test').hidden = false;
+            $('#scan-result').innerHTML = '<dt>Gescand</dt><dd class="mono">' + esc(d.data) + '</dd>' + (d.symbology ? '<dt>Type</dt><dd>' + esc(d.symbology) + '</dd>' : '');
         }
         if (type === 'update') {
             var btn = $('#upd-check');

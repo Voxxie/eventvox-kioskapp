@@ -61,8 +61,15 @@ Met Zebra StageNow (gratis) kun je via één barcode-scan de APK en `webkiosk.pr
 kan StageNow niet zetten; daarvoor is de eenmalige adb-stap nodig. Alternatief voor de vergrendeling zonder adb: Zebra
 **Enterprise Home Screen** (ook gratis) met EventVOX-Webkiosk als enige toegestane app.
 
-## Barcodescanner
-DataWedge staat standaard aan: een scan wordt als toetsaanslagen in het actieve invoerveld van de website getypt.
+## Barcodescanner (DataWedge)
+De app maakt bij het starten zelf een DataWedge-profiel **EventVOX-Webkiosk** (scanner aan, toetsaanslagen uit, scan
+als intent naar de app). De app typt de code dan in de pagina, gevolgd door Enter, precies zoals een scanner-toetsenbord:
+de EventVOX-scanterminal (en elke site die op toetsaanslagen + Enter wacht) hoeft niets te weten van de app.
+- `scan_mode`: `keyboard` (standaard), `event` (JavaScript-event `webkiosk-scan` met `{ data, symbology }`), `both`, `off`.
+- `datawedge=off`: de app laat DataWedge met rust en verwijdert zijn profiel; dan moet DataWedge zelf toetsaanslagen
+  met Enter sturen. Toetsaanslagen komen altijd bij de website aan, ook als die even geen focus had.
+- Beheerscherm > Scanner: status van het profiel, een testscan (gaat dan niet naar de website) en *Profiel opnieuw instellen*.
+
 
 ## NFC
 De TC51 heeft NFC. WebView ondersteunt geen Web NFC, dus de app leest de tags zelf en geeft ze door aan de website.

@@ -162,6 +162,13 @@ public class MainActivity extends Activity {
         wf.addAction(Intent.ACTION_USER_PRESENT);
         wf.addAction(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED);
         registerReceiver(wakeReceiver, wf);
+        // DataWedge-scans en de uitslag van het instellen (met en zonder categorie: DataWedge zet er geen bij)
+        IntentFilter df = new IntentFilter(DataWedge.SCAN_ACTION);
+        df.addAction(DataWedge.RESULT_ACTION);
+        registerReceiver(scanReceiver, df);
+        IntentFilter dfc = new IntentFilter(DataWedge.SCAN_ACTION);
+        dfc.addCategory(Intent.CATEGORY_DEFAULT);
+        registerReceiver(scanReceiver2, dfc);
 
         root = new FrameLayout(this);
         root.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
@@ -170,6 +177,7 @@ public class MainActivity extends Activity {
         web.setFocusableInTouchMode(true);
         web.requestFocus();
         watchSystemBars();
+        setupDataWedge();
         loadHome();
         schedulePeriodicReload();
         handler.postDelayed(updateCheck, 60000); // eerste controle 1 minuut na start
@@ -213,7 +221,7 @@ public class MainActivity extends Activity {
                 String v = p.getProperty(key);
                 if (v != null) e.putBoolean(key, Boolean.parseBoolean(v.trim()));
             }
-            for (String key : new String[]{"nfc_mode", "nfc_uid_format", "nfc_keyboard_value"}) {
+            for (String key : new String[]{"nfc_mode", "nfc_uid_format", "nfc_keyboard_value", "scan_mode", "datawedge"}) {
                 String v = p.getProperty(key);
                 if (v != null && !v.trim().isEmpty()) e.putString(key, v.trim().toLowerCase());
             }
@@ -720,6 +728,73 @@ public class MainActivity extends Activity {
         return super.dispatchKeyEvent(e);
     }
 
+    // ---------- scanner (DataWedge) ----------
+
+    /** scan_mode: keyboard (typen + Enter, standaard), event (alleen JavaScript-event webkiosk-scan), both, off */
+    private String scanMode() { return prefs.getString("scan_mode", "keyboard"); }
+
+    /** datawedge: app (de app stelt zijn eigen DataWedge-profiel in, standaard) of off (DataWedge niet aanraken) */
+    private boolean manageDataWedge() { return !"off".equals(prefs.getString("datawedge", "app")); }
+
+    private int dwFailed = 0;
+    private String lastScan = "";
+
+    private void setupDataWedge() {
+        if (!DataWedge.installed(this)) { prefs.edit().putString("dw_status", "DataWedge niet gevonden (geen Zebra?)").apply(); return; }
+        if (!manageDataWedge()) { prefs.edit().putString("dw_status", "Niet door de app ingesteld: DataWedge gebruikt zijn eigen profielen").apply(); return; }
+        dwFailed = 0;
+        prefs.edit().putString("dw_status", "Profiel " + DataWedge.PROFILE + " wordt ingesteld…").apply();
+        DataWedge.configure(this);
+    }
+
+    private final BroadcastReceiver scanReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) { onDataWedge(i); }
+    };
+    private final BroadcastReceiver scanReceiver2 = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) { onDataWedge(i); }
+    };
+
+    private long lastScanAt = 0;
+    private String lastScanData = "";
+
+    private void onDataWedge(Intent i) {
+        if (DataWedge.RESULT_ACTION.equals(i.getAction())) {
+            String id = i.getStringExtra("COMMAND_IDENTIFIER");
+            if (id == null || !id.startsWith("webkiosk-")) return;
+            if (!"SUCCESS".equals(i.getStringExtra("RESULT"))) {
+                dwFailed++;
+                Bundle info = i.getBundleExtra("RESULT_INFO");
+                Object code = info == null ? null : info.get("RESULT_CODE");
+                prefs.edit().putString("dw_status", "Instellen mislukt (" + id.substring(9) + (code == null ? "" : ": " + code) + ")").apply();
+            } else if ("webkiosk-keystroke".equals(id) && dwFailed == 0) {
+                prefs.edit().putString("dw_status", "Profiel " + DataWedge.PROFILE + " actief: scans gaan via de app").apply();
+            }
+            return;
+        }
+        String data = i.getStringExtra(DataWedge.EXTRA_DATA);
+        if (data == null || data.isEmpty()) return;
+        // Dezelfde scan via beide ontvangers (met en zonder categorie): één keer
+        long now = SystemClock.uptimeMillis();
+        if (data.equals(lastScanData) && now - lastScanAt < 300) return;
+        lastScanData = data;
+        lastScanAt = now;
+        String type = i.getStringExtra(DataWedge.EXTRA_TYPE);
+        deliverScan(data, type == null ? "" : type.replace("LABEL-TYPE-", ""));
+    }
+
+    private void deliverScan(String data, String symbology) {
+        lastScan = data + (symbology.isEmpty() ? "" : " (" + symbology + ")");
+        JSONObject o = new JSONObject();
+        try { o.put("data", data); o.put("symbology", symbology); } catch (Exception ignored) {}
+        if (adminView != null) { adminEmit("scan", o); return; } // beheerscherm open: daar tonen, niet aan de website
+        String mode = scanMode();
+        if (mode.equals("event") || mode.equals("both")) {
+            web.evaluateJavascript("(function(d){try{window.dispatchEvent(new CustomEvent('webkiosk-scan',{detail:d}));}catch(e){}"
+                + "if(typeof window.onWebKioskScan==='function')window.onWebKioskScan(d);})(" + o + ");", null);
+        }
+        if (mode.equals("keyboard") || mode.equals("both")) typeText(data, true);
+    }
+
     /** Typt tekst als echte toetsaanslagen in het actieve invoerveld (zoals DataWedge). */
     private void typeText(String text, boolean enter) {
         focusWeb();
@@ -997,6 +1072,8 @@ public class MainActivity extends Activity {
         st.put("reload_minutes", prefs.getInt("reload_minutes", 0));
         st.put("ignore_ssl_errors", prefs.getBoolean("ignore_ssl_errors", false));
         st.put("menu_taps", prefs.getInt("menu_taps", 10));
+        st.put("scan_mode", scanMode());
+        st.put("datawedge", manageDataWedge() ? "app" : "off");
         o.put("settings", st);
         JSONObject n = new JSONObject();
         n.put("available", nfc != null);
@@ -1011,6 +1088,11 @@ public class MainActivity extends Activity {
         u.put("defaultUrl", Updater.DEFAULT_URL);
         o.put("update", u);
         o.put("wifi", wifiStatus());
+        JSONObject sc = new JSONObject();
+        sc.put("installed", DataWedge.installed(this));
+        sc.put("status", prefs.getString("dw_status", ""));
+        sc.put("last", lastScan);
+        o.put("scanner", sc);
         o.put("battery", batteryJson(lastBattery));
         return o;
     }
@@ -1061,7 +1143,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private static final java.util.List<String> STRING_KEYS = java.util.Arrays.asList("nfc_mode", "nfc_uid_format", "nfc_keyboard_value");
+    private static final java.util.List<String> STRING_KEYS = java.util.Arrays.asList("nfc_mode", "nfc_uid_format", "nfc_keyboard_value", "scan_mode", "datawedge");
     private static final java.util.List<String> BOOL_KEYS = java.util.Arrays.asList("nfc_send_enter", "auto_update", "keep_screen_on", "ignore_ssl_errors");
     private static final java.util.List<String> INT_KEYS = java.util.Arrays.asList("nfc_refresh_seconds", "update_check_hours", "reload_minutes", "menu_taps");
 
@@ -1083,6 +1165,17 @@ public class MainActivity extends Activity {
         if ("update_url".equals(key)) {
             if (!v.isEmpty() && !v.matches("(?i)^https?://.+")) return "Het update-adres moet met https:// beginnen";
             e.putString("update_url", v).commit();
+            return null;
+        }
+        if ("datawedge".equals(key)) {
+            e.putString(key, v).commit();
+            runOnUiThread(new Runnable() { public void run() {
+                if (manageDataWedge()) setupDataWedge();
+                else {
+                    if (DataWedge.installed(MainActivity.this)) DataWedge.remove(MainActivity.this);
+                    prefs.edit().putString("dw_status", "Profiel verwijderd: DataWedge gebruikt zijn eigen profielen").apply();
+                }
+            }});
             return null;
         }
         if (STRING_KEYS.contains(key)) e.putString(key, v);
@@ -1107,6 +1200,11 @@ public class MainActivity extends Activity {
     private void adminAction(String name, String arg) {
         switch (name) {
             case "close": hideAdmin(); break;
+            case "dataWedge":
+                setupDataWedge();
+                adminToast("DataWedge-profiel wordt ingesteld");
+                handler.postDelayed(new Runnable() { public void run() { adminEmit("refresh", new JSONObject()); } }, 1500);
+                break;
             case "reload": loadHome(); adminToast("Pagina wordt herladen"); break;
             case "clearCache":
                 web.clearCache(true);
@@ -1151,6 +1249,8 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         try { unregisterReceiver(batteryReceiver); } catch (Exception ignored) {}
         try { unregisterReceiver(wakeReceiver); } catch (Exception ignored) {}
+        try { unregisterReceiver(scanReceiver); } catch (Exception ignored) {}
+        try { unregisterReceiver(scanReceiver2); } catch (Exception ignored) {}
         handler.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
