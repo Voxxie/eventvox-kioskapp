@@ -110,6 +110,10 @@ public class MainActivity extends Activity {
             }
             @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap f) {
                 pageError = false;
+                v.evaluateJavascript(BATTERY_POLYFILL, null); // zo vroeg mogelijk: vóór de scripts van de pagina
+            }
+            @Override public void onPageCommitVisible(WebView v, String url) {
+                v.evaluateJavascript(BATTERY_POLYFILL, null);
             }
             @Override public void onPageFinished(WebView v, String url) {
                 v.evaluateJavascript(BATTERY_POLYFILL, null);
@@ -302,19 +306,31 @@ public class MainActivity extends Activity {
         if (min > 0) handler.postDelayed(periodicReload, min * 60000L);
     }
 
-    /** Zorgt dat navigator.getBattery() altijd werkt, ook als de WebView-versie hem niet heeft. */
+    /**
+     * Battery Status API op basis van Android's BatteryManager (via WebKiosk.getBattery), ook als de WebView hem niet heeft.
+     * Altijd deze (niet de eventuele eigen van de WebView): chargingTime blijft Infinity (onbekend), zodat een volle,
+     * ladende accu niet lijkt op een toestel zonder accu (zo herkent de EventVOX-scanterminal een Raspberry Pi).
+     * Wordt zo vroeg mogelijk in elke pagina gezet (onPageStarted/onPageCommitVisible) en nogmaals bij onPageFinished.
+     */
     private static final String BATTERY_POLYFILL =
-        "(function(){if(!window.WebKiosk||window.__wkBattery)return;window.__wkBattery=1;"
-      + "function rd(){var d=JSON.parse(WebKiosk.getBattery());return d;}"
-      + "var bm={level:1,charging:false,chargingTime:Infinity,dischargingTime:Infinity,"
-      + "onlevelchange:null,onchargingchange:null,_l:{},"
-      + "addEventListener:function(t,f){(this._l[t]=this._l[t]||[]).push(f);},"
-      + "removeEventListener:function(t,f){var a=this._l[t]||[];var i=a.indexOf(f);if(i>=0)a.splice(i,1);},"
-      + "_fire:function(t){var e={type:t,target:this};(this._l[t]||[]).forEach(function(f){f.call(bm,e);});if(typeof this['on'+t]==='function')this['on'+t](e);}};"
-      + "function upd(d){var l=d.level/100,c=!!d.charging,lc=l!==bm.level,cc=c!==bm.charging;bm.level=l;bm.charging=c;"
-      + "bm.chargingTime=d.full?0:Infinity;if(lc)bm._fire('levelchange');if(cc)bm._fire('chargingchange');}"
-      + "upd(rd());window.addEventListener('webkiosk-battery',function(e){upd(e.detail);});"
-      + "if(!navigator.getBattery){navigator.getBattery=function(){return Promise.resolve(bm);};}})();";
+        "(function(){"
+          + "if(!window.WebKiosk||window.__wkBattery)return;window.__wkBattery=1;"
+          + "function rd(){try{return JSON.parse(WebKiosk.getBattery());}catch(e){return {level:100,charging:false};}}"
+          + "var bm={level:1,charging:false,chargingTime:Infinity,dischargingTime:Infinity,"
+          + "onlevelchange:null,onchargingchange:null,onchargingtimechange:null,ondischargingtimechange:null,_l:{},"
+          + "addEventListener:function(t,f){(this._l[t]=this._l[t]||[]).push(f);},"
+          + "removeEventListener:function(t,f){var a=this._l[t]||[];var i=a.indexOf(f);if(i>=0)a.splice(i,1);},"
+          + "dispatchEvent:function(e){this._fire(e.type);return true;},"
+          + "_fire:function(t){var e={type:t,target:bm,currentTarget:bm};(this._l[t]||[]).slice().forEach(function(f){try{f.call(bm,e);}catch(x){}});"
+          + "if(typeof this['on'+t]==='function')try{this['on'+t](e);}catch(x){}}};"
+          + "function upd(d){if(!d||typeof d.level!=='number')return;var l=d.level/100,c=!!d.charging,lc=l!==bm.level,cc=c!==bm.charging;"
+          + "bm.level=l;bm.charging=c;if(lc)bm._fire('levelchange');if(cc){bm._fire('chargingchange');bm._fire('chargingtimechange');}}"
+          + "upd(rd());"
+          + "window.addEventListener('webkiosk-battery',function(e){upd(e.detail);});"
+          + "var gb=function(){return Promise.resolve(bm);};"
+          + "try{Object.defineProperty(Navigator.prototype,'getBattery',{value:gb,configurable:true,writable:true});}catch(e){}"
+          + "try{Object.defineProperty(navigator,'getBattery',{value:gb,configurable:true,writable:true});}catch(e){navigator.getBattery=gb;}"
+          + "})();";
 
     private static String page(String title, String body) {
         return "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>"

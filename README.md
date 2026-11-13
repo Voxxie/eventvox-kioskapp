@@ -108,7 +108,9 @@ bij elke heartbeat van een terminal; de terminalpagina in EventVOX toont daaruit
 
 ## JavaScript: batterij en toestel
 ```js
-// Standaard Battery API (werkt altijd; is de WebView te oud, dan levert de app hem zelf)
+// Standaard Battery API: de app levert hem zelf (uit Android's BatteryManager), vóór de scripts van de pagina,
+// zodat ook de EventVOX-scanterminal het batterij-icoon toont en de batterij met de heartbeat meestuurt.
+// chargingTime is altijd Infinity: een volle accu aan de lader blijft zo 100% ⚡ tonen.
 const b = await navigator.getBattery();
 b.level;     // 0.0 - 1.0
 b.charging;  // true/false
