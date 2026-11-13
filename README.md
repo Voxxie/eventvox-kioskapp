@@ -130,6 +130,12 @@ bij elke heartbeat van een terminal; de terminalpagina in EventVOX toont daaruit
 (bv. *EventVOX-Webkiosk 0.0.1*). Wil je de versie ook in de URL: gebruik `{version}`, bv.
 `https://eventvox.nl/scanterminal?serial={serial}&app={version}`.
 
+## Accu-slijtage in EventVOX
+Op een Zebra geeft Android extra gegevens over de accu zelf. De app zet die in `WebKiosk.getBattery().pack`
+(gezondheid %, laadcycli, vervangadvies van Zebra, onderdeel- en serienummer, productiedatum, capaciteit; alleen wat het
+toestel kent). De EventVOX-scanterminal stuurt dat mee met de heartbeat; de terminalpagina toont de regel **Accu**, en
+lijst en pagina tonen *Accu vervangen* (rood) of *Accu NN%* (oranje, onder 80%). In een gewone browser gebeurt niets.
+
 ## JavaScript: batterij en toestel
 ```js
 // Standaard Battery API: de app levert hem zelf (uit Android's BatteryManager), vóór de scripts van de pagina,
@@ -145,7 +151,8 @@ b.addEventListener('chargingchange', () => ...);
 const info = JSON.parse(WebKiosk.getBattery());
 // { level: 87, charging: true, full: false, plugged: "ac"|"usb"|"none",
 //   health: "good", temperature: 28.5, voltage: 4.12, technology: "Li-ion",
-//   raw: { ...alle gegevens van Android/Zebra, o.a. accu-serienummer en laadcycli indien beschikbaar } }
+//   pack: { percent, cycles, decommission, serial, part_number, manufactured, rated_capacity },  // alleen wat de accu weet (Zebra)
+//   raw: { ...alle gegevens van Android/Zebra } }
 window.addEventListener('webkiosk-battery', e => console.log(e.detail));   // bij wijziging
 
 WebKiosk.getSerial();                    // "18123522501234"

@@ -279,8 +279,57 @@ public class MainActivity extends Activity {
                 if (v instanceof Number || v instanceof Boolean || v instanceof String) raw.put(k, v);
             }
             o.put("raw", raw);
+            JSONObject pack = batteryPack(ex);
+            if (pack.length() > 0) o.put("pack", pack);
         } catch (Exception ignored) {}
         return o;
+    }
+
+    /**
+     * De accu zelf (slijtage), uit de extra gegevens die Zebra aan ACTION_BATTERY_CHANGED toevoegt. Welke er zijn,
+     * verschilt per toestel en firmware; alleen wat er is komt erin (leeg object: niets bekend, bv. geen Zebra).
+     *   percent: gezondheid 0-100 · cycles: laadcycli · decommission: Zebra raadt vervangen aan ·
+     *   serial, part_number, manufactured (datum), rated_capacity (mAh)
+     */
+    private static JSONObject batteryPack(Bundle ex) throws Exception {
+        JSONObject p = new JSONObject();
+        if (ex == null) return p;
+        Integer health = intExtra(ex, "health_percentage", "battery_health_percentage", "health_percent");
+        Integer rated = intExtra(ex, "ratedcapacity", "rated_capacity", "design_capacity");
+        Integer present = intExtra(ex, "present_capacity", "full_charge_capacity");
+        if (health == null && rated != null && present != null && rated > 0) health = Math.round(present * 100f / rated);
+        if (health != null && health >= 0 && health <= 100) p.put("percent", health);
+        Integer cycles = intExtra(ex, "cycle_count", "battery_cycle_count", "cycles");
+        Integer cumulative = intExtra(ex, "total_cumulative_charge");
+        if (cycles == null && cumulative != null && rated != null && rated > 0) cycles = cumulative / rated;
+        if (cycles != null && cycles >= 0) p.put("cycles", cycles);
+        Integer decom = intExtra(ex, "battery_decommission");
+        if (decom != null && (decom == 0 || decom == 1)) p.put("decommission", decom == 1);
+        String serial = strExtra(ex, "serialnumber", "battery_serial");
+        if (serial != null) p.put("serial", serial);
+        String part = strExtra(ex, "partnumber", "battery_partnumber");
+        if (part != null) p.put("part_number", part);
+        String mfd = strExtra(ex, "mfd", "manufacture_date");
+        if (mfd != null) p.put("manufactured", mfd);
+        if (rated != null && rated > 0) p.put("rated_capacity", rated);
+        return p;
+    }
+
+    private static Integer intExtra(Bundle ex, String... keys) {
+        for (String k : keys) {
+            Object v = ex.get(k);
+            if (v instanceof Number) return ((Number) v).intValue();
+            if (v instanceof String) try { return Integer.parseInt(((String) v).trim()); } catch (NumberFormatException ignored) {}
+        }
+        return null;
+    }
+
+    private static String strExtra(Bundle ex, String... keys) {
+        for (String k : keys) {
+            Object v = ex.get(k);
+            if (v != null && !String.valueOf(v).trim().isEmpty()) return String.valueOf(v).trim();
+        }
+        return null;
     }
     private String pin() { return prefs.getString("pin", "1234"); }
 
