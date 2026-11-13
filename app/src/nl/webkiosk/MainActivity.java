@@ -121,6 +121,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onPageFinished(WebView v, String url) {
                 v.evaluateJavascript(BATTERY_POLYFILL, null);
+                focusWeb();
             }
             @SuppressWarnings("deprecation")
             @Override public void onReceivedError(WebView v, int code, String desc, String url) {
@@ -165,6 +166,9 @@ public class MainActivity extends Activity {
         root = new FrameLayout(this);
         root.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
+        web.setFocusable(true);
+        web.setFocusableInTouchMode(true);
+        web.requestFocus();
         watchSystemBars();
         loadHome();
         schedulePeriodicReload();
@@ -503,6 +507,7 @@ public class MainActivity extends Activity {
             applyDeviceOwnerPolicies();
         }
         resumed = true;
+        focusWeb();
         hideSystemUi();
         enterKiosk();
         restartNfc("onResume");
@@ -519,7 +524,7 @@ public class MainActivity extends Activity {
 
     @Override public void onWindowFocusChanged(boolean f) {
         super.onWindowFocusChanged(f);
-        if (f) { hideSystemUi(); restartNfc("focus"); }
+        if (f) { hideSystemUi(); restartNfc("focus"); focusWeb(); }
     }
 
     @Override protected void onNewIntent(Intent i) {
@@ -692,8 +697,32 @@ public class MainActivity extends Activity {
         if (mode.equals("keyboard") || mode.equals("both")) typeText(kbValue, prefs.getBoolean("nfc_send_enter", true));
     }
 
+    // ---------- toetsenbord-focus ----------
+
+    /** De website de focus geven (niet als het beheerscherm open is), zodat toetsaanslagen daar aankomen */
+    private void focusWeb() {
+        if (web != null && adminView == null && !web.hasFocus()) web.requestFocus();
+    }
+
+    /**
+     * Toetsaanslagen (DataWedge als toetsenbord, een USB-/Bluetooth-toetsenbord of -scanner) die nergens heen zouden
+     * gaan omdat de website de focus kwijt is (bv. na het beheerscherm), alsnog naar de website.
+     * Terug, home, volume en aan/uit blijven bij Android.
+     */
+    @Override public boolean dispatchKeyEvent(KeyEvent e) {
+        int k = e.getKeyCode();
+        boolean system = k == KeyEvent.KEYCODE_BACK || k == KeyEvent.KEYCODE_HOME || k == KeyEvent.KEYCODE_VOLUME_UP
+            || k == KeyEvent.KEYCODE_VOLUME_DOWN || k == KeyEvent.KEYCODE_POWER || k == KeyEvent.KEYCODE_APP_SWITCH;
+        if (!system && adminView == null && web != null && !web.hasFocus()) {
+            web.requestFocus();
+            return web.dispatchKeyEvent(e);
+        }
+        return super.dispatchKeyEvent(e);
+    }
+
     /** Typt tekst als echte toetsaanslagen in het actieve invoerveld (zoals DataWedge). */
     private void typeText(String text, boolean enter) {
+        focusWeb();
         KeyCharacterMap km = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD);
         KeyEvent[] evs = km.getEvents(text.toCharArray());
         if (evs != null) for (KeyEvent e : evs) web.dispatchKeyEvent(e);
@@ -929,6 +958,7 @@ public class MainActivity extends Activity {
         adminView.destroy();
         adminView = null;
         hideSystemUi();
+        focusWeb();
         // toetsenbord dicht
         android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
         if (imm != null) imm.hideSoftInputFromWindow(root.getWindowToken(), 0);
