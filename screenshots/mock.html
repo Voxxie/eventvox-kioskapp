@@ -29,9 +29,8 @@ h1{font-size:20px;margin:0 0 4px} .sub{color:#666;font-size:13px;margin-bottom:1
 .err{text-align:center;padding:40px 16px;color:#333;overflow-wrap:anywhere}.err h2{font-size:20px}
 </style></head><body>
 <h1>EventVOX-Webkiosk 0.0.1 op Zebra TC51</h1>
-<div class="sub">Schermen 1–4 en 14 zijn echte schermafbeeldingen van de EventVOX-scanterminal en de terminalpagina (eventvox-frontend, met testgegevens) op het TC51-formaat. De beheerdialogen van de app zijn nagebootst; kleuren en lettertypen kunnen per firmware afwijken.</div>
+<div class="sub">Echte schermafbeeldingen: de EventVOX-scanterminal (1–4) en de terminalpagina (14) uit eventvox-frontend met testgegevens, en het beheerscherm van de app (5–11). Nagebootst: de foutpagina (12) en Android App-info (13).</div>
 <div class="grid">
-
 <div><div class="phone"><div class="scr"><img class="bg" src="terminal/pair.png"></div></div><div class="cap">1. Koppelen: serienummer uit de app in de URL</div></div>
 
 <div><div class="phone"><div class="scr"><img class="bg" src="terminal/idle.png"><div class="tap" style="left:230px;top:150px">10×</div></div></div><div class="cap">2. Scanterminal fullscreen – 10× tikken op dezelfde plek opent het beheermenu</div></div>
@@ -40,87 +39,23 @@ h1{font-size:20px;margin:0 0 4px} .sub{color:#666;font-size:13px;margin-bottom:1
 
 <div><div class="phone"><div class="scr"><img class="bg" src="terminal/refused.png"></div></div><div class="cap">4. Geweigerd (geannuleerd ticket)</div></div>
 
+<div><div class="phone"><div class="scr"><img class="bg" src="beheer/1-pin.png"></div></div><div class="cap">5. PIN</div></div>
 
+<div><div class="phone"><div class="scr"><img class="bg" src="beheer/2-admin.png"></div></div><div class="cap">6. Beheerscherm</div></div>
 
-<div><div class="phone"><div class="scr"><img class="bg" src="terminal/idle.png">
-  <div class="dim"></div>
-  <div class="dlg"><h3>Beheer-PIN</h3><div class="inp">••••</div>
-  <div class="btns"><span class="btn">Annuleren</span><span class="btn">OK</span></div></div>
-</div></div><div class="cap">5. PIN invoeren</div></div>
+<div><div class="phone"><div class="scr"><img class="bg" src="beheer/3-nfc.png"></div></div><div class="cap">7. NFC-instellingen en live NFC-test</div></div>
 
-<div><div class="phone"><div class="scr"><img class="bg" src="terminal/idle.png">
-  <div class="dim"></div>
-  <div class="dlg"><h3>EventVOX-Webkiosk 0.0.1 · SN 18123522501234</h3>
-   <div class="item">Website-adres wijzigen<small>https://eventvox.nl/scanterminal?serial=18123522501234</small></div>
-   <div class="item">NFC-instellingen<small>Typen + JavaScript-event</small></div>
-   <div class="item">Overige instellingen</div>
-   <div class="item">Updates</div>
-   <div class="item">Pagina herladen</div>
-   <div class="item">Cache en cookies wissen</div>
-   <div class="item">App sluiten (naar Android-instellingen)</div>
-   <div class="item">Kiosk-modus definitief uitschakelen</div>
-   <div class="btns"><span class="btn">Sluiten</span></div></div>
-</div></div><div class="cap">6. Beheermenu</div></div>
+<div><div class="phone"><div class="scr"><img class="bg" src="beheer/4-updates.png"></div></div><div class="cap">8. Updates: nieuwe versie gevonden</div></div>
 
-<div><div class="phone"><div class="scr"><img class="bg" src="terminal/idle.png">
-  <div class="dim"></div>
-  <div class="dlg"><h3>Website-adres ({serial} = serienummer)</h3>
-   <div class="inp" style="font-size:13px">https://eventvox.nl/scanterminal?serial={serial}</div>
-   <div class="btns"><span class="btn">Terug</span><span class="btn">Opslaan</span></div></div>
-</div></div><div class="cap">7. Website-adres wijzigen</div></div>
+<div><div class="phone"><div class="scr"><img class="bg" src="beheer/5-scherm.png"></div></div><div class="cap">9. Scherm, beveiliging en wifi</div></div>
 
-<div><div class="phone"><div class="scr"><img class="bg" src="terminal/idle.png">
-  <div class="dim"></div>
-  <div class="dlg"><h3>NFC (hardware: aan)</h3>
-   <div class="item">Modus<small>Typen + JavaScript-event</small></div>
-   <div class="item">Formaat tag-ID<small>Hex (04A1B2C3)</small></div>
-   <div class="item">Wat typen<small>Tag-ID (UID)</small></div>
-   <div class="item">Enter na typen: aan</div>
-   <div class="item">NFC testen</div>
-   <div class="item">NFC nu herstarten<small>laatst herstart 12 s geleden (scherm aan), 7x totaal</small></div>
-   <div class="item">Periodiek verversen: uit</div>
-   <div class="item">NFC in Android aan/uit zetten</div>
-   <div class="btns"><span class="btn">Terug</span></div></div>
-</div></div><div class="cap">8. NFC-instellingen</div></div>
+<div><div class="phone"><div class="scr"><img class="bg" src="beheer/6-apparaat.png"></div></div><div class="cap">10. Apparaat en kiosk verlaten</div></div>
 
-<div><div class="phone"><div class="scr"><img class="bg" src="terminal/idle.png">
-  <div class="dim"></div>
-  <div class="dlg"><h3>Formaat tag-ID</h3>
-   <div class="radio on"><i></i>Hex (04A1B2C3)</div>
-   <div class="radio"><i></i>Hex omgekeerd</div>
-   <div class="radio"><i></i>Hex met dubbele punten (04:A1:B2)</div>
-   <div class="radio"><i></i>Decimaal</div>
-   <div class="radio"><i></i>Decimaal omgekeerd</div>
-   <div class="btns"><span class="btn">Terug</span></div></div>
-</div></div><div class="cap">9. Keuze UID-formaat</div></div>
-
-<div><div class="phone"><div class="scr"><img class="bg" src="terminal/idle.png">
-  <div class="dim"></div>
-  <div class="dlg"><h3>NFC testen</h3>
-   <div class="msg">Tag-ID: 04A1B2C3D45E80
-Hex: 04A1B2C3D45E80
-Type: ["NfcA","MifareUltralight","Ndef"]
-Inhoud (text): TICKET-55821
-
-Wordt getypt als: 04A1B2C3D45E80</div>
-   <div class="btns"><span class="btn">Terug</span></div></div>
-</div></div><div class="cap">10. NFC testen (voorbeeldtag)</div></div>
-
-<div><div class="phone"><div class="scr"><img class="bg" src="terminal/idle.png">
-  <div class="dim"></div>
-  <div class="dlg"><h3>Overige instellingen</h3>
-   <div class="item">Beheer-PIN wijzigen</div>
-   <div class="item">Aantal tikken voor dit menu: 10</div>
-   <div class="item">Scherm altijd aan: uit</div>
-   <div class="item">Automatisch herladen: uit</div>
-   <div class="item">SSL-fouten negeren: uit</div>
-   <div class="item">Wifi-instellingen</div>
-   <div class="btns"><span class="btn">Terug</span></div></div>
-</div></div><div class="cap">11. Overige instellingen</div></div>
+<div><div class="phone"><div class="scr"><img class="bg" src="beheer/7-bevestigen.png"></div></div><div class="cap">11. Bevestigen voor uitschakelen</div></div>
 
 <div><div class="phone"><div class="scr">
   <div class="err"><h2>Geen verbinding</h2><p>De pagina kon niet worden geladen (net::ERR_INTERNET_DISCONNECTED).<br>Opnieuw proberen over 10 seconden…</p></div>
-</div></div><div class="cap">12. Geen netwerk (echte foutpagina van de app)</div></div>
+</div></div><div class="cap">12. Geen netwerk (foutpagina van de app)</div></div>
 
 <div><div class="phone"><div class="scr" style="background:#fafafa">
   <div style="background:#5e2572;color:#fff;padding:16px;font-size:16px">App-info</div>

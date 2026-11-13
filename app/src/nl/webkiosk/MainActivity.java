@@ -1,7 +1,6 @@
 package nl.webkiosk;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.admin.DevicePolicyManager;
 import android.content.*;
 import android.content.pm.PackageManager;
@@ -13,7 +12,6 @@ import android.nfc.tech.Ndef;
 import org.json.*;
 import android.os.*;
 import android.provider.Settings;
-import android.text.InputType;
 import android.view.*;
 import android.webkit.*;
 import android.widget.*;
@@ -42,7 +40,13 @@ public class MainActivity extends Activity {
     private int tapCount = 0;
     private long lastTap = 0;
     private float tapX, tapY;
-    private AlertDialog nfcTestDialog;
+    private boolean nfcTesting = false;
+    private FrameLayout root;
+    private WebView adminView;
+    private boolean adminUnlocked = false;
+    private int pinFails = 0;
+    private long pinLockedUntil = 0;
+    private Updater.Info lastUpdateInfo;
     private boolean kioskSuspended = false;
     private boolean pageError = false;
     private NfcAdapter nfc;
@@ -158,7 +162,9 @@ public class MainActivity extends Activity {
         wf.addAction(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED);
         registerReceiver(wakeReceiver, wf);
 
-        setContentView(web);
+        root = new FrameLayout(this);
+        root.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(root);
         watchSystemBars();
         loadHome();
         schedulePeriodicReload();
@@ -481,6 +487,7 @@ public class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
+        if (adminView != null) { adminEmit("back", new JSONObject()); return; }
         if (web.canGoBack()) web.goBack();
         // anders: niets doen, app kan niet via terug-knop worden verlaten
     }
@@ -513,7 +520,7 @@ public class MainActivity extends Activity {
 
     private void startNfc() {
         if (nfc == null) return;
-        if ("off".equals(prefs.getString("nfc_mode", "both")) && nfcTestDialog == null) return;
+        if ("off".equals(prefs.getString("nfc_mode", "both")) && !nfcTesting) return;
         startNfcForced();
     }
 
@@ -622,17 +629,9 @@ public class MainActivity extends Activity {
     }
 
     private void deliverNfc(JSONObject o, String kbValue) {
-        if (nfcTestDialog != null) {
-            StringBuilder m = new StringBuilder();
-            m.append("Tag-ID: ").append(o.optString("uid")).append("\nHex: ").append(o.optString("uidHex"))
-             .append("\nType: ").append(o.optJSONArray("techs"));
-            JSONArray nd = o.optJSONArray("ndef");
-            if (nd != null) for (int i = 0; i < nd.length(); i++) {
-                JSONObject r = nd.optJSONObject(i);
-                m.append("\nInhoud (").append(r.optString("type")).append("): ").append(r.optString("value"));
-            }
-            m.append("\n\nWordt getypt als: ").append(kbValue);
-            nfcTestDialog.setMessage(m.toString());
+        if (nfcTesting && adminView != null) { // test in het beheerscherm: niet aan de website doorgeven
+            try { o.put("typed", kbValue); } catch (Exception ignored) {}
+            adminEmit("nfc", o);
             return;
         }
         String mode = prefs.getString("nfc_mode", "both");
@@ -726,7 +725,7 @@ public class MainActivity extends Activity {
 
     /** interactive=true: resultaat tonen in een dialoog; anders stil en automatisch installeren. */
     private void checkForUpdate(final boolean interactive) {
-        if (updateBusy) { if (interactive) toast("Update is al bezig"); return; }
+        if (updateBusy) { if (interactive) adminToast("Update is al bezig"); return; }
         updateBusy = true;
         final String url = updateUrl();
         new Thread(new Runnable() { public void run() {
@@ -747,22 +746,17 @@ public class MainActivity extends Activity {
             if (info != null && info.versionCode > cur) installWhenIdle(info);
             return;
         }
-        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle("Updates");
-        final Runnable back = new Runnable() { public void run() { updateMenu(); } };
-        if (err != null) {
-            b.setMessage("Controleren mislukt:\n" + err + "\n\nUpdate-adres:\n" + updateUrl());
-        } else if (info.versionCode > cur) {
-            b.setMessage("Nieuwe versie beschikbaar: " + info.versionName + "\nHuidig: " + appVersion()
-                + (info.notes.isEmpty() ? "" : "\n\n" + info.notes));
-            b.setPositiveButton("Nu installeren", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int w) { downloadAndInstall(info, true); }
-            });
-        } else {
-            b.setMessage("Je hebt de nieuwste versie (" + appVersion() + ").");
-        }
-        b.setNegativeButton("Terug", new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface d, int w) { back.run(); }
-        }).show();
+        JSONObject d = new JSONObject();
+        try {
+            if (err != null) d.put("error", err + " (" + updateUrl() + ")");
+            else {
+                lastUpdateInfo = info;
+                d.put("newer", info.versionCode > cur);
+                d.put("versionName", info.versionName);
+                d.put("notes", info.notes);
+            }
+        } catch (Exception ignored) {}
+        adminEmit("update", d);
     }
 
     /** Niet installeren terwijl iemand het toestel gebruikt: wacht tot 2 minuten geen aanraking. */
@@ -778,7 +772,7 @@ public class MainActivity extends Activity {
     private void downloadAndInstall(final Updater.Info info, final boolean interactive) {
         if (updateBusy) return;
         updateBusy = true;
-        if (interactive) toast("Update " + info.versionName + " downloaden…");
+        if (interactive) adminToast("Update " + info.versionName + " downloaden en installeren…");
         new Thread(new Runnable() { public void run() {
             String err = null;
             try {
@@ -789,272 +783,42 @@ public class MainActivity extends Activity {
             if (err != null) {
                 final String fe = err;
                 prefs.edit().putString("update_last_result", "fout: " + fe).apply();
-                runOnUiThread(new Runnable() { public void run() { if (interactive) toast("Update mislukt: " + fe); } });
+                runOnUiThread(new Runnable() { public void run() { if (interactive) adminToast("Update mislukt: " + fe); } });
             }
         }}).start();
-    }
-
-    private void updateMenu() {
-        final Runnable self = new Runnable() { public void run() { updateMenu(); } };
-        long last = prefs.getLong("update_last_check", 0);
-        String lastTxt = last == 0 ? "nog niet" : new java.text.SimpleDateFormat("d-M HH:mm").format(new java.util.Date(last))
-            + " (" + prefs.getString("update_last_result", "") + ")";
-        int hours = prefs.getInt("update_check_hours", 0);
-        String[] items = {
-            "Nu controleren op updates\nHuidige versie " + appVersion() + " · laatst: " + lastTxt,
-            "Automatisch bijwerken: " + onOff(prefs.getBoolean("auto_update", true)),
-            "Ook periodiek controleren: " + (hours > 0 ? "elke " + hours + " uur" : "nee (alleen bij start en handmatig)"),
-            "Update-adres\n" + updateUrl()
-        };
-        list("Updates", items, new Choice() {
-            public void chosen(int w) {
-                switch (w) {
-                    case 0: toast("Controleren…"); checkForUpdate(true); break;
-                    case 1: prefs.edit().putBoolean("auto_update", !prefs.getBoolean("auto_update", true)).apply(); updateMenu(); break;
-                    case 2: input("Daarnaast elke X uur controleren (0 = alleen bij start)", String.valueOf(prefs.getInt("update_check_hours", 0)), InputType.TYPE_CLASS_NUMBER,
-                            new Choice() { public void chosen(int x) {
-                                try { prefs.edit().putInt("update_check_hours", Math.max(0, Integer.parseInt(inputValue))).apply(); }
-                                catch (NumberFormatException e) { toast("Ongeldig getal"); }
-                                handler.removeCallbacks(updateCheck);
-                                int h = prefs.getInt("update_check_hours", 0);
-                                if (h > 0) handler.postDelayed(updateCheck, h * 3600000L);
-                                updateMenu(); } }, self); break;
-                    case 3: input("Update-adres (leeg = standaard)", prefs.getString("update_url", ""), InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI,
-                            new Choice() { public void chosen(int x) { prefs.edit().putString("update_url", inputValue).apply(); updateMenu(); } }, self); break;
-                }
-            }
-        }, new Runnable() { public void run() { adminMenu(); } });
     }
 
     // ---------- verborgen beheermenu ----------
 
     @Override public boolean dispatchTouchEvent(MotionEvent ev) {
         lastTouch = SystemClock.uptimeMillis();
+        if (adminView != null) {
+            handler.removeCallbacks(adminTimeout);
+            handler.postDelayed(adminTimeout, ADMIN_IDLE_MS);
+            return super.dispatchTouchEvent(ev);
+        }
         if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
             float spot = SAME_SPOT_DP * getResources().getDisplayMetrics().density;
             long now = SystemClock.uptimeMillis();
             boolean same = Math.abs(ev.getX() - tapX) < spot && Math.abs(ev.getY() - tapY) < spot;
             if (now - lastTap > MAX_TAP_GAP_MS || !same) { tapCount = 0; tapX = ev.getX(); tapY = ev.getY(); }
             lastTap = now;
-            if (++tapCount >= prefs.getInt("menu_taps", 10)) { tapCount = 0; askPin(); }
+            if (++tapCount >= prefs.getInt("menu_taps", 10)) { tapCount = 0; showAdmin(); }
         }
         return super.dispatchTouchEvent(ev);
     }
 
-    private void askPin() {
-        final EditText in = new EditText(this);
-        in.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-        new AlertDialog.Builder(this).setTitle("Beheer-PIN").setView(in)
-            .setPositiveButton("OK", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int w) {
-                    if (in.getText().toString().equals(pin())) adminMenu();
-                    else Toast.makeText(MainActivity.this, "Onjuiste PIN", Toast.LENGTH_SHORT).show();
-                }
-            }).setNegativeButton("Annuleren", null).show();
-    }
-
-    private interface Choice { void chosen(int which); }
-
-    private void list(String title, String[] items, final Choice c, final Runnable back) {
-        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(title)
-            .setItems(items, new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int w) { c.chosen(w); }
-            });
-        if (back != null) b.setNegativeButton("Terug", new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface d, int w) { back.run(); }
-        }); else b.setNegativeButton("Sluiten", null);
-        b.show();
-    }
-
-    private void single(String title, final String[] labels, final String[] values, String current,
-                        final String key, final Runnable back) {
-        int sel = java.util.Arrays.asList(values).indexOf(current);
-        new AlertDialog.Builder(this).setTitle(title)
-            .setSingleChoiceItems(labels, sel, new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int w) {
-                    prefs.edit().putString(key, values[w]).apply();
-                    d.dismiss();
-                    applyRuntimeSettings();
-                    back.run();
-                }
-            }).setNegativeButton("Terug", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int w) { back.run(); }
-            }).show();
-    }
-
-    private void input(String title, String value, int type, final Choice ok, final Runnable back) {
-        final EditText in = new EditText(this);
-        in.setInputType(type);
-        in.setText(value);
-        in.setSelection(in.getText().length());
-        new AlertDialog.Builder(this).setTitle(title).setView(in)
-            .setPositiveButton("Opslaan", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int w) { inputValue = in.getText().toString().trim(); ok.chosen(0); }
-            }).setNegativeButton("Terug", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int w) { back.run(); }
-            }).show();
-    }
-    private String inputValue = "";
-
-    private static String onOff(boolean b) { return b ? "aan" : "uit"; }
-
-    private void adminMenu() {
-        String url = homeUrl().isEmpty() ? "(niet ingesteld)" : resolvedUrl();
-        String[] items = {
-            "Website-adres wijzigen\n" + url,
-            "NFC-instellingen\n" + labelOf(NFC_MODE_L, NFC_MODE_V, prefs.getString("nfc_mode", "both")),
-            "Overige instellingen",
-            "Updates",
-            "Pagina herladen",
-            "Cache en cookies wissen",
-            "App sluiten (naar Android-instellingen)",
-            "Kiosk-modus definitief uitschakelen"
-        };
-        list("EventVOX-Webkiosk " + appVersion() + " · SN " + serial() + (isOwner() ? "" : " · geen device owner"), items, new Choice() {
-            public void chosen(int w) {
-                switch (w) {
-                    case 0: editUrl(); break;
-                    case 1: nfcMenu(); break;
-                    case 2: otherMenu(); break;
-                    case 3: updateMenu(); break;
-                    case 4: loadHome(); break;
-                    case 5: web.clearCache(true); CookieManager.getInstance().removeAllCookies(null);
-                            WebStorage.getInstance().deleteAllData(); loadHome();
-                            toast("Cache en cookies gewist"); break;
-                    case 6: confirm("App sluiten?", "De kiosk wordt tijdelijk verlaten. Open EventVOX-Webkiosk opnieuw (of herstart het toestel) om terug te gaan.",
-                                new Runnable() { public void run() { leaveKiosk(); } }); break;
-                    case 7: confirm("Kiosk-modus uitschakelen?", "Het toestel wordt weer een normaal Android-toestel. Opnieuw inrichten kan alleen via het provision-script.",
-                                new Runnable() { public void run() { removeOwner(); } }); break;
-                }
-            }
-        }, null);
-    }
-
-    private static final String[] NFC_MODE_L = {"Uit", "Typen in invoerveld", "JavaScript-event", "Typen + JavaScript-event"};
-    private static final String[] NFC_MODE_V = {"off", "keyboard", "event", "both"};
-    private static final String[] NFC_FMT_L = {"Hex (04A1B2C3)", "Hex omgekeerd", "Hex met dubbele punten (04:A1:B2)", "Decimaal", "Decimaal omgekeerd"};
-    private static final String[] NFC_FMT_V = {"hex", "hex_reversed", "hex_colon", "dec", "dec_reversed"};
-    private static final String[] NFC_VAL_L = {"Tag-ID (UID)", "Tekst/URL op de tag (anders UID)"};
-    private static final String[] NFC_VAL_V = {"uid", "ndef"};
-
-    private static String labelOf(String[] l, String[] v, String cur) {
-        int i = java.util.Arrays.asList(v).indexOf(cur);
-        return i < 0 ? cur : l[i];
-    }
-
-    private void nfcMenu() {
-        final Runnable self = new Runnable() { public void run() { nfcMenu(); } };
-        String hw = nfc == null ? "niet aanwezig" : (nfc.isEnabled() ? "aan" : "UIT in Android");
-        String[] items = {
-            "Modus\n" + labelOf(NFC_MODE_L, NFC_MODE_V, prefs.getString("nfc_mode", "both")),
-            "Formaat tag-ID\n" + labelOf(NFC_FMT_L, NFC_FMT_V, prefs.getString("nfc_uid_format", "hex")),
-            "Wat typen\n" + labelOf(NFC_VAL_L, NFC_VAL_V, prefs.getString("nfc_keyboard_value", "uid")),
-            "Enter na typen: " + onOff(prefs.getBoolean("nfc_send_enter", true)),
-            "NFC testen",
-            "NFC nu herstarten\n" + nfcStatus(),
-            "Periodiek verversen: " + (prefs.getInt("nfc_refresh_seconds", 0) > 0 ? "elke " + prefs.getInt("nfc_refresh_seconds", 0) + " s" : "uit"),
-            "NFC in Android aan/uit zetten"
-        };
-        list("NFC (hardware: " + hw + ")", items, new Choice() {
-            public void chosen(int w) {
-                switch (w) {
-                    case 0: single("NFC-modus", NFC_MODE_L, NFC_MODE_V, prefs.getString("nfc_mode", "both"), "nfc_mode", self); break;
-                    case 1: single("Formaat tag-ID", NFC_FMT_L, NFC_FMT_V, prefs.getString("nfc_uid_format", "hex"), "nfc_uid_format", self); break;
-                    case 2: single("Wat typen", NFC_VAL_L, NFC_VAL_V, prefs.getString("nfc_keyboard_value", "uid"), "nfc_keyboard_value", self); break;
-                    case 3: prefs.edit().putBoolean("nfc_send_enter", !prefs.getBoolean("nfc_send_enter", true)).apply(); nfcMenu(); break;
-                    case 4: nfcTest(self); break;
-                    case 5: restartNfc("handmatig"); toast("NFC wordt herstart");
-                            handler.postDelayed(new Runnable() { public void run() { nfcMenu(); } }, 1800); break;
-                    case 6: input("Reader mode elke X seconden verversen (0 = uit)", String.valueOf(prefs.getInt("nfc_refresh_seconds", 0)),
-                            InputType.TYPE_CLASS_NUMBER, new Choice() { public void chosen(int x) {
-                                try { prefs.edit().putInt("nfc_refresh_seconds", Math.max(0, Integer.parseInt(inputValue))).apply(); }
-                                catch (NumberFormatException e) { toast("Ongeldig getal"); }
-                                schedulePeriodicNfcRefresh(); nfcMenu(); } }, self); break;
-                    case 7: kioskSuspended = true;
-                            try { stopLockTask(); } catch (Exception ignored) {}
-                            try { startActivity(new Intent(Settings.ACTION_NFC_SETTINGS)); }
-                            catch (Exception e) { startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS)); }
-                            break;
-                }
-            }
-        }, new Runnable() { public void run() { adminMenu(); } });
-    }
-
     private String nfcStatus() {
-        if (nfcLastRestart == 0) return "nog niet herstart";
+        if (nfcLastRestart == 0) return "NFC nog niet herstart";
         long ago = (System.currentTimeMillis() - nfcLastRestart) / 1000;
-        return "laatst herstart " + ago + " s geleden (" + nfcRestartReason + "), " + nfcRestarts + "x totaal";
-    }
-
-    private void nfcTest(final Runnable back) {
-        if (nfc == null) { toast("Dit toestel heeft geen NFC"); back.run(); return; }
-        nfcTestDialog = new AlertDialog.Builder(this).setTitle("NFC testen")
-            .setMessage("Houd een tag tegen de achterkant van het toestel…")
-            .setNegativeButton("Terug", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int w) { back.run(); }
-            }).create();
-        nfcTestDialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
-            public void onDismiss(DialogInterface d) { nfcTestDialog = null; applyRuntimeSettings(); }
-        });
-        nfcTestDialog.show();
-        lastTagUid = ""; // in testmodus elke tag tonen
-        restartNfc("test");
-    }
-
-    private void otherMenu() {
-        final Runnable self = new Runnable() { public void run() { otherMenu(); } };
-        final int reload = prefs.getInt("reload_minutes", 0);
-        String[] items = {
-            "Beheer-PIN wijzigen",
-            "Aantal tikken voor dit menu: " + prefs.getInt("menu_taps", 10),
-            "Scherm altijd aan: " + onOff(prefs.getBoolean("keep_screen_on", false)),
-            "Automatisch herladen: " + (reload > 0 ? "elke " + reload + " min" : "uit"),
-            "SSL-fouten negeren: " + onOff(prefs.getBoolean("ignore_ssl_errors", false)),
-            "Wifi-instellingen\n" + wifiStatus()
-        };
-        list("Overige instellingen", items, new Choice() {
-            public void chosen(int w) {
-                switch (w) {
-                    case 0: input("Nieuwe PIN (min. 4 cijfers)", "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD,
-                            new Choice() { public void chosen(int x) {
-                                if (inputValue.length() >= 4) { prefs.edit().putString("pin", inputValue).apply(); toast("PIN gewijzigd"); }
-                                else toast("PIN moet minimaal 4 cijfers zijn");
-                                otherMenu(); } }, self); break;
-                    case 1: input("Aantal tikken (5–20)", String.valueOf(prefs.getInt("menu_taps", 10)), InputType.TYPE_CLASS_NUMBER,
-                            new Choice() { public void chosen(int x) {
-                                try { int n = Integer.parseInt(inputValue); if (n >= 5 && n <= 20) prefs.edit().putInt("menu_taps", n).apply(); else toast("Kies 5 t/m 20"); }
-                                catch (NumberFormatException e) { toast("Ongeldig getal"); }
-                                otherMenu(); } }, self); break;
-                    case 2: prefs.edit().putBoolean("keep_screen_on", !prefs.getBoolean("keep_screen_on", false)).apply();
-                            applyRuntimeSettings(); otherMenu(); break;
-                    case 3: input("Herladen elke X minuten (0 = uit)", String.valueOf(reload), InputType.TYPE_CLASS_NUMBER,
-                            new Choice() { public void chosen(int x) {
-                                try { prefs.edit().putInt("reload_minutes", Math.max(0, Integer.parseInt(inputValue))).apply(); }
-                                catch (NumberFormatException e) { toast("Ongeldig getal"); }
-                                schedulePeriodicReload(); otherMenu(); } }, self); break;
-                    case 4: prefs.edit().putBoolean("ignore_ssl_errors", !prefs.getBoolean("ignore_ssl_errors", false)).apply(); otherMenu(); break;
-                    case 5: kioskSuspended = true;
-                            try { stopLockTask(); } catch (Exception ignored) {}
-                            startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS)); break;
-                }
-            }
-        }, new Runnable() { public void run() { adminMenu(); } });
+        return "Laatst herstart " + ago + " s geleden (" + nfcRestartReason + "), " + nfcRestarts + "× totaal";
     }
 
     private String wifiStatus() {
         java.util.Set<String> ssids = prefs.getStringSet("wifi_ssids", null);
         String r = prefs.getString("wifi_result", "");
-        if (ssids == null || ssids.isEmpty()) return r.isEmpty() ? "geen profielen uit config" : "profielen: " + r;
-        return "profielen: " + android.text.TextUtils.join(", ", new java.util.TreeSet<>(ssids)) + (r.isEmpty() ? "" : " · " + r);
-    }
-
-    private void confirm(String title, String msg, final Runnable yes) {
-        new AlertDialog.Builder(this).setTitle(title).setMessage(msg)
-            .setPositiveButton("Ja", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int w) { yes.run(); }
-            }).setNegativeButton("Nee", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int w) { adminMenu(); }
-            }).show();
+        if (ssids == null || ssids.isEmpty()) return r.isEmpty() ? "Geen wifi-profielen uit de configuratie." : "Profielen: " + r;
+        return "Profielen uit de configuratie: " + android.text.TextUtils.join(", ", new java.util.TreeSet<>(ssids)) + (r.isEmpty() ? "" : " · " + r);
     }
 
     private void toast(String t) { Toast.makeText(this, t, Toast.LENGTH_SHORT).show(); }
@@ -1084,18 +848,225 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void editUrl() {
-        input("Website-adres ({serial} = serienummer)", homeUrl().isEmpty() ? DEFAULT_URL : homeUrl(),
-            InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI, new Choice() {
-                public void chosen(int x) {
-                    String u = inputValue;
-                    if (!u.isEmpty() && !u.matches("(?i)^(https?|file|about):.*")) u = "https://" + u;
-                    prefs.edit().putString("url", u).apply();
-                    web.clearHistory();
-                    loadHome();
-                    toast("Website-adres opgeslagen");
+    // ---------- beheerscherm (assets/admin.html) ----------
+
+    private static final long ADMIN_IDLE_MS = 180000;
+    private final Runnable adminTimeout = new Runnable() { public void run() { hideAdmin(); } };
+
+    private void showAdmin() {
+        if (adminView != null) return;
+        adminUnlocked = false;
+        adminView = new WebView(this);
+        adminView.setBackgroundColor(Color.parseColor("#5e2572"));
+        WebSettings as = adminView.getSettings();
+        as.setJavaScriptEnabled(true);
+        as.setAllowFileAccess(true);
+        as.setSupportZoom(false);
+        adminView.setWebViewClient(new WebViewClient() {
+            @Override public boolean shouldOverrideUrlLoading(WebView v, String url) { return !url.startsWith("file:///android_asset/"); }
+        });
+        adminView.addJavascriptInterface(new AdminBridge(), "Kiosk");
+        adminView.loadUrl("file:///android_asset/admin.html");
+        root.addView(adminView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        handler.postDelayed(adminTimeout, ADMIN_IDLE_MS);
+    }
+
+    private void hideAdmin() {
+        handler.removeCallbacks(adminTimeout);
+        if (adminView == null) return;
+        if (nfcTesting) { nfcTesting = false; applyRuntimeSettings(); }
+        adminUnlocked = false;
+        root.removeView(adminView);
+        adminView.destroy();
+        adminView = null;
+        hideSystemUi();
+        // toetsenbord dicht
+        android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(root.getWindowToken(), 0);
+    }
+
+    private void adminEmit(String type, JSONObject data) {
+        if (adminView == null) return;
+        adminView.evaluateJavascript("window.kioskEvent&&window.kioskEvent(" + JSONObject.quote(type) + "," + data + ")", null);
+    }
+
+    private void adminToast(String text) {
+        if (adminView == null) { toast(text); return; }
+        JSONObject d = new JSONObject();
+        try { d.put("text", text); } catch (Exception ignored) {}
+        adminEmit("toast", d);
+    }
+
+    private JSONObject adminState() throws Exception {
+        JSONObject o = new JSONObject();
+        o.put("version", appVersion());
+        o.put("serial", serial());
+        o.put("model", Build.MANUFACTURER + " " + Build.MODEL);
+        o.put("android", Build.VERSION.RELEASE + " (" + Build.DISPLAY + ")");
+        o.put("owner", isOwner());
+        o.put("url", homeUrl());
+        o.put("resolvedUrl", resolvedUrl());
+        JSONObject st = new JSONObject();
+        st.put("nfc_mode", prefs.getString("nfc_mode", "both"));
+        st.put("nfc_uid_format", prefs.getString("nfc_uid_format", "hex"));
+        st.put("nfc_keyboard_value", prefs.getString("nfc_keyboard_value", "uid"));
+        st.put("nfc_send_enter", prefs.getBoolean("nfc_send_enter", true));
+        st.put("nfc_refresh_seconds", prefs.getInt("nfc_refresh_seconds", 0));
+        st.put("auto_update", prefs.getBoolean("auto_update", true));
+        st.put("update_check_hours", prefs.getInt("update_check_hours", 0));
+        st.put("keep_screen_on", prefs.getBoolean("keep_screen_on", false));
+        st.put("reload_minutes", prefs.getInt("reload_minutes", 0));
+        st.put("ignore_ssl_errors", prefs.getBoolean("ignore_ssl_errors", false));
+        st.put("menu_taps", prefs.getInt("menu_taps", 10));
+        o.put("settings", st);
+        JSONObject n = new JSONObject();
+        n.put("available", nfc != null);
+        n.put("enabled", nfc != null && nfc.isEnabled());
+        n.put("status", nfcStatus());
+        o.put("nfc", n);
+        JSONObject u = new JSONObject();
+        long last = prefs.getLong("update_last_check", 0);
+        u.put("lastCheck", last == 0 ? "" : new java.text.SimpleDateFormat("d-M HH:mm").format(new java.util.Date(last)));
+        u.put("lastResult", prefs.getString("update_last_result", ""));
+        u.put("url", prefs.getString("update_url", ""));
+        u.put("defaultUrl", Updater.DEFAULT_URL);
+        o.put("update", u);
+        o.put("wifi", wifiStatus());
+        o.put("battery", batteryJson(lastBattery));
+        return o;
+    }
+
+    /** Wordt door admin.js aangeroepen (op een achtergrondthread van de WebView). */
+    private class AdminBridge {
+        @JavascriptInterface public String pin(String code) {
+            JSONObject r = new JSONObject();
+            try {
+                long now = System.currentTimeMillis();
+                if (now < pinLockedUntil) { r.put("locked", (pinLockedUntil - now + 999) / 1000); return r.toString(); }
+                if (code != null && code.equals(MainActivity.this.pin())) {
+                    adminUnlocked = true; pinFails = 0; r.put("ok", true);
+                } else if (code != null && code.length() >= MainActivity.this.pin().length()) {
+                    r.put("wrong", true);
+                    if (++pinFails >= 5) { pinFails = 0; pinLockedUntil = now + 60000; r.put("locked", 60); }
                 }
-            }, new Runnable() { public void run() { adminMenu(); } });
+            } catch (Exception ignored) {}
+            return r.toString();
+        }
+
+        @JavascriptInterface public String state() {
+            if (!adminUnlocked) return "{}";
+            final String[] out = {"{}"};
+            final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+            runOnUiThread(new Runnable() { public void run() {
+                try { out[0] = adminState().toString(); } catch (Exception ignored) {}
+                done.countDown();
+            }});
+            try { done.await(2, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+            return out[0];
+        }
+
+        @JavascriptInterface public String set(final String key, final String value) {
+            JSONObject r = new JSONObject();
+            try {
+                if (!adminUnlocked) { r.put("error", "Niet ontgrendeld"); return r.toString(); }
+                String err = applySetting(key, value == null ? "" : value.trim());
+                if (err != null) r.put("error", err); else r.put("ok", true);
+                if (err == null && ("url".equals(key) || "pin".equals(key) || "update_url".equals(key))) r.put("message", "Opgeslagen");
+            } catch (Exception e) { try { r.put("error", e.getMessage()); } catch (Exception ignored) {} }
+            return r.toString();
+        }
+
+        @JavascriptInterface public void action(final String name, final String arg) {
+            if (!"close".equals(name) && !adminUnlocked) return;
+            runOnUiThread(new Runnable() { public void run() { adminAction(name, arg); } });
+        }
+    }
+
+    private static final java.util.List<String> STRING_KEYS = java.util.Arrays.asList("nfc_mode", "nfc_uid_format", "nfc_keyboard_value");
+    private static final java.util.List<String> BOOL_KEYS = java.util.Arrays.asList("nfc_send_enter", "auto_update", "keep_screen_on", "ignore_ssl_errors");
+    private static final java.util.List<String> INT_KEYS = java.util.Arrays.asList("nfc_refresh_seconds", "update_check_hours", "reload_minutes", "menu_taps");
+
+    /** Eén instelling opslaan en toepassen; geeft een foutmelding of null. */
+    private String applySetting(String key, String v) {
+        SharedPreferences.Editor e = prefs.edit();
+        if ("url".equals(key)) {
+            if (!v.isEmpty() && !v.matches("(?i)^(https?|file|about):.*")) v = "https://" + v;
+            if (v.isEmpty()) return "Vul een adres in";
+            e.putString("url", v).commit();
+            runOnUiThread(new Runnable() { public void run() { web.clearHistory(); loadHome(); } });
+            return null;
+        }
+        if ("pin".equals(key)) {
+            if (!v.matches("[0-9]{4,8}")) return "De PIN moet 4 tot 8 cijfers zijn";
+            e.putString("pin", v).commit();
+            return null;
+        }
+        if ("update_url".equals(key)) {
+            if (!v.isEmpty() && !v.matches("(?i)^https?://.+")) return "Het update-adres moet met https:// beginnen";
+            e.putString("update_url", v).commit();
+            return null;
+        }
+        if (STRING_KEYS.contains(key)) e.putString(key, v);
+        else if (BOOL_KEYS.contains(key)) e.putBoolean(key, Boolean.parseBoolean(v));
+        else if (INT_KEYS.contains(key)) {
+            int n;
+            try { n = Integer.parseInt(v); } catch (NumberFormatException x) { return "Ongeldig getal"; }
+            if ("menu_taps".equals(key) && (n < 5 || n > 20)) return "Kies 5 tot 20 tikken";
+            e.putInt(key, Math.max(0, n));
+        } else return "Onbekende instelling: " + key;
+        e.commit();
+        runOnUiThread(new Runnable() { public void run() {
+            applyRuntimeSettings();
+            schedulePeriodicReload();
+            handler.removeCallbacks(updateCheck);
+            int h = prefs.getInt("update_check_hours", 0);
+            if (h > 0) handler.postDelayed(updateCheck, h * 3600000L);
+        }});
+        return null;
+    }
+
+    private void adminAction(String name, String arg) {
+        switch (name) {
+            case "close": hideAdmin(); break;
+            case "reload": loadHome(); adminToast("Pagina wordt herladen"); break;
+            case "clearCache":
+                web.clearCache(true);
+                CookieManager.getInstance().removeAllCookies(null);
+                WebStorage.getInstance().deleteAllData();
+                loadHome();
+                adminToast("Cache en cookies gewist");
+                break;
+            case "nfcRestart":
+                restartNfc("handmatig");
+                adminToast("NFC wordt herstart");
+                handler.postDelayed(new Runnable() { public void run() { adminEmit("refresh", new JSONObject()); } }, 1800);
+                break;
+            case "nfcTest":
+                nfcTesting = "start".equals(arg);
+                lastTagUid = "";
+                if (nfcTesting && nfc == null) adminToast("Dit toestel heeft geen NFC");
+                applyRuntimeSettings();
+                break;
+            case "nfcSettings":
+                hideAdmin();
+                kioskSuspended = true;
+                try { stopLockTask(); } catch (Exception ignored) {}
+                try { startActivity(new Intent(Settings.ACTION_NFC_SETTINGS)); }
+                catch (Exception e) { startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS)); }
+                break;
+            case "wifiSettings":
+                hideAdmin();
+                kioskSuspended = true;
+                try { stopLockTask(); } catch (Exception ignored) {}
+                startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
+                break;
+            case "checkUpdate": checkForUpdate(true); break;
+            case "installUpdate":
+                if (lastUpdateInfo != null) downloadAndInstall(lastUpdateInfo, true);
+                break;
+            case "leave": hideAdmin(); leaveKiosk(); break;
+            case "removeOwner": hideAdmin(); removeOwner(); break;
+        }
     }
 
     @Override protected void onDestroy() {

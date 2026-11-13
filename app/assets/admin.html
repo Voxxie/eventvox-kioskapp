@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Beheer</title>
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<!-- PIN -->
+<section id="pin" class="pin">
+  <div class="pin-top">
+    <img src="logo.png" alt="" class="pin-logo">
+    <h1>Beheer</h1>
+    <p class="muted" id="pin-hint">Voer de beheer-PIN in</p>
+    <div class="dots" id="dots"></div>
+  </div>
+  <div class="keypad" id="keypad">
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+    <button data-k="cancel" class="key-text">Annuleren</button><button data-k="0">0</button><button data-k="back" class="key-text" aria-label="Wissen">⌫</button>
+  </div>
+</section>
+
+<!-- Beheer -->
+<section id="admin" class="admin" hidden>
+  <header class="top">
+    <img src="logo.png" alt="" class="top-logo">
+    <div class="top-text">
+      <div class="top-title">EventVOX-Webkiosk</div>
+      <div class="top-sub" id="top-sub"></div>
+    </div>
+    <button class="close" data-action="close" aria-label="Sluiten">✕</button>
+  </header>
+
+  <main>
+    <div class="card">
+      <h2><span class="ic">🌐</span>Website</h2>
+      <label class="lbl" for="url">Adres</label>
+      <input id="url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <p class="hint">Wordt ingevuld: <code>{serial}</code> serienummer · <code>{version}</code> app-versie · <code>{model}</code></p>
+      <p class="preview" id="url-preview"></p>
+      <div class="row">
+        <button class="btn primary" data-save="url">Opslaan</button>
+        <button class="btn" data-action="reload">Herladen</button>
+        <button class="btn" data-action="clearCache">Cache wissen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">📶</span>NFC <span class="pill" id="nfc-pill"></span></h2>
+      <label class="lbl">Doorgeven aan de website</label>
+      <div class="seg" data-setting="nfc_mode">
+        <button data-v="off">Uit</button><button data-v="keyboard">Typen</button><button data-v="event">Event</button><button data-v="both">Beide</button>
+      </div>
+      <label class="lbl" for="nfc_uid_format">Formaat tag-ID</label>
+      <select id="nfc_uid_format" data-setting="nfc_uid_format">
+        <option value="hex">Hex — 04A1B2C3</option>
+        <option value="hex_reversed">Hex omgekeerd — C3B2A104</option>
+        <option value="hex_colon">Hex met dubbele punten — 04:A1:B2:C3</option>
+        <option value="dec">Decimaal</option>
+        <option value="dec_reversed">Decimaal omgekeerd</option>
+      </select>
+      <label class="lbl" for="nfc_keyboard_value">Wat typen</label>
+      <select id="nfc_keyboard_value" data-setting="nfc_keyboard_value">
+        <option value="uid">Tag-ID</option>
+        <option value="ndef">Tekst of URL op de tag (anders tag-ID)</option>
+      </select>
+      <div class="toggle-row"><span>Enter na typen</span><label class="sw"><input type="checkbox" data-setting="nfc_send_enter"><i></i></label></div>
+      <div class="toggle-row"><span>Periodiek verversen<small>extra vangnet na slaapstand</small></span>
+        <div class="stepper" data-setting="nfc_refresh_seconds" data-step="30" data-min="0" data-max="600" data-unit="s" data-zero="uit"></div></div>
+
+      <div class="test" id="nfc-test" hidden>
+        <div class="test-wait" id="nfc-wait"><span class="pulse"></span>Houd een tag tegen de achterkant…</div>
+        <dl class="kv" id="nfc-result" hidden></dl>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="nfc-test-btn">NFC testen</button>
+        <button class="btn" data-action="nfcRestart">Herstarten</button>
+        <button class="btn" data-action="nfcSettings">Android-NFC</button>
+      </div>
+      <p class="hint" id="nfc-status"></p>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">⬇️</span>Updates</h2>
+      <div class="big-row"><div><div class="big" id="upd-version"></div><div class="hint" id="upd-last"></div></div>
+        <button class="btn primary" data-action="checkUpdate" id="upd-check">Controleren</button></div>
+      <div class="result" id="upd-result" hidden></div>
+      <div class="toggle-row"><span>Automatisch installeren<small>bij het starten, na 2 min zonder aanraking</small></span><label class="sw"><input type="checkbox" data-setting="auto_update"><i></i></label></div>
+      <div class="toggle-row"><span>Ook periodiek controleren</span>
+        <div class="stepper" data-setting="update_check_hours" data-step="1" data-min="0" data-max="168" data-unit="uur" data-zero="nee"></div></div>
+      <details><summary>Update-adres</summary>
+        <input id="update_url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="">
+        <div class="row"><button class="btn" data-save="update_url">Opslaan</button></div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">🖥️</span>Scherm en beveiliging</h2>
+      <div class="toggle-row"><span>Scherm altijd aan</span><label class="sw"><input type="checkbox" data-setting="keep_screen_on"><i></i></label></div>
+      <div class="toggle-row"><span>Automatisch herladen</span>
+        <div class="stepper" data-setting="reload_minutes" data-step="5" data-min="0" data-max="1440" data-unit="min" data-zero="uit"></div></div>
+      <div class="toggle-row"><span>SSL-fouten negeren<small>alleen voor interne servers</small></span><label class="sw"><input type="checkbox" data-setting="ignore_ssl_errors"><i></i></label></div>
+      <div class="toggle-row"><span>Tikken voor dit menu</span>
+        <div class="stepper" data-setting="menu_taps" data-step="1" data-min="5" data-max="20" data-unit="×"></div></div>
+      <details><summary>Beheer-PIN wijzigen</summary>
+        <input id="newpin" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="Nieuwe PIN (minimaal 4 cijfers)">
+        <div class="row"><button class="btn" data-save="pin">PIN opslaan</button></div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">📡</span>Wifi</h2>
+      <p class="hint" id="wifi-status"></p>
+      <div class="row"><button class="btn" data-action="wifiSettings">Wifi-instellingen</button></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="ic">📱</span>Apparaat</h2>
+      <dl class="kv" id="device"></dl>
+    </div>
+
+    <div class="card danger">
+      <h2><span class="ic">⚠️</span>Kiosk verlaten</h2>
+      <div class="row col">
+        <button class="btn" data-confirm="leave">App sluiten (naar Android-instellingen)</button>
+        <button class="btn red" data-confirm="removeOwner">Kiosk-modus definitief uitschakelen</button>
+      </div>
+    </div>
+    <p class="foot">Sluit vanzelf na 3 minuten zonder aanraking.</p>
+  </main>
+</section>
+
+<!-- Bevestigen -->
+<div class="sheet-bg" id="sheet" hidden>
+  <div class="sheet">
+    <h3 id="sheet-title"></h3>
+    <p id="sheet-text"></p>
+    <div class="row end"><button class="btn" id="sheet-no">Annuleren</button><button class="btn primary" id="sheet-yes">Doorgaan</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<script src="admin.js"></script>
+</body>
+</html>

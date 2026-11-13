@@ -27,7 +27,7 @@ VERSION_ARGS=()
 [ -n "${VERSION_NAME:-}" ] && VERSION_ARGS+=(--version-name "$VERSION_NAME")
 
 rm -rf build && mkdir -p build/gen build/classes
-aapt package -f -m -J build/gen -M AndroidManifest.xml -S res -I "$SDK" "${VERSION_ARGS[@]}" -F build/unsigned.apk
+aapt package -f -m -J build/gen -M AndroidManifest.xml -S res -A assets -I "$SDK" "${VERSION_ARGS[@]}" -F build/unsigned.apk
 javac --release 8 -nowarn -Xlint:-options -classpath "$SDK" -d build/classes $(find src build/gen -name '*.java')
 dalvik-exchange --dex --output=build/classes.dex build/classes
 (cd build && aapt add unsigned.apk classes.dex >/dev/null)

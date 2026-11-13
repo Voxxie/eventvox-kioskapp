@@ -33,19 +33,22 @@ Het script installeert de app, zet de config op `/sdcard/webkiosk.properties`, m
 Daarna: statusbalk uit, home/recent-knoppen werken niet, de app start na een herstart vanzelf, schermvergrendeling uit.
 USB-foutopsporing kun je daarna weer uitzetten.
 
-## Beheermenu op het toestel
-Tik **10x snel op dezelfde plek** op het scherm (maximaal ~0,7 s tussen de tikken) → voer de PIN in (standaard `1234`).
+## Beheerscherm op het toestel
+Tik **10x snel op dezelfde plek** op het scherm (maximaal ~0,7 s tussen de tikken) en voer de PIN in op het toetsenblok
+(standaard `1234`; na 5 keer fout 1 minuut geblokkeerd). Het beheerscherm (`app/assets/admin.html`) heeft:
 
-- **Website-adres wijzigen**
-- **NFC-instellingen**: modus (uit / typen / JavaScript-event / beide), formaat tag-ID, wat typen (UID of tekst op tag),
-  Enter na typen aan/uit, **NFC testen** (toont direct wat een tag oplevert), NFC in Android aan/uit
-- **Overige instellingen**: PIN wijzigen, aantal tikken (5–20), scherm altijd aan, automatisch herladen, SSL-fouten negeren, wifi-instellingen
-- **Pagina herladen** / **Cache en cookies wissen**
-- **App sluiten**: naar de Android-instellingen; open EventVOX-Webkiosk opnieuw of herstart om terug te gaan
-- **Kiosk-modus definitief uitschakelen**: toestel wordt weer normaal Android (opnieuw inrichten via provision-script)
+- **Website**: adres met `{serial}`, `{version}`, `{model}` en een voorbeeld van het ingevulde adres; herladen; cache wissen
+- **NFC**: doorgeven (uit / typen / event / beide), formaat tag-ID, wat typen, Enter na typen, periodiek verversen,
+  **NFC testen** (toont live wat een tag oplevert, zonder het aan de website door te geven), herstarten, Android-NFC
+- **Updates**: huidige versie, nu controleren (met release-notes en *Nu installeren*), automatisch, interval, update-adres
+- **Scherm en beveiliging**: scherm altijd aan, automatisch herladen, SSL-fouten negeren, aantal tikken, PIN wijzigen
+- **Wifi**: welke profielen de app heeft gezet; wifi-instellingen
+- **Apparaat**: serienummer, model, Android-versie, batterij, kiosk-modus
+- **Kiosk verlaten**: app sluiten (naar Android-instellingen) of kiosk-modus definitief uitschakelen, met bevestiging
 
-Instellingen uit het menu blijven bewaard. Een **nieuw of gewijzigd** `webkiosk.properties`-bestand overschrijft ze bij de volgende start;
-een ongewijzigd bestand niet.
+Het scherm sluit vanzelf na 3 minuten zonder aanraking; de terugknop sluit het ook.
+Instellingen uit het beheerscherm blijven bewaard. Een **nieuw of gewijzigd** `webkiosk.properties`-bestand overschrijft
+ze bij de volgende start; een ongewijzigd bestand niet.
 
 ## URL later wijzigen
 - Via het beheermenu op het toestel, of
