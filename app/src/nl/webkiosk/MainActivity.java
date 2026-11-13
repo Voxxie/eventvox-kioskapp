@@ -147,6 +147,10 @@ public class MainActivity extends Activity {
         }, "WebKiosk");
 
         lastBattery = registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        IntentFilter wf = new IntentFilter(Intent.ACTION_SCREEN_ON);
+        wf.addAction(Intent.ACTION_USER_PRESENT);
+        wf.addAction(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED);
+        registerReceiver(wakeReceiver, wf);
 
         setContentView(web);
         loadHome();
@@ -194,6 +198,10 @@ public class MainActivity extends Activity {
             for (String key : new String[]{"nfc_mode", "nfc_uid_format", "nfc_keyboard_value"}) {
                 String v = p.getProperty(key);
                 if (v != null && !v.trim().isEmpty()) e.putString(key, v.trim().toLowerCase());
+            }
+            for (String key : new String[]{"nfc_refresh_seconds", "nfc_debounce_ms"}) {
+                String v = p.getProperty(key);
+                if (v != null) try { e.putInt(key, Integer.parseInt(v.trim())); } catch (NumberFormatException ignored) {}
             }
             String ne = p.getProperty("nfc_send_enter");
             if (ne != null) e.putBoolean("nfc_send_enter", Boolean.parseBoolean(ne.trim()));
@@ -367,19 +375,24 @@ public class MainActivity extends Activity {
             kioskSuspended = false;
             applyDeviceOwnerPolicies();
         }
+        resumed = true;
         hideSystemUi();
         enterKiosk();
-        startNfc();
+        restartNfc("onResume");
+        schedulePeriodicNfcRefresh();
     }
 
     @Override protected void onPause() {
+        resumed = false;
+        handler.removeCallbacks(nfcRestart);
+        handler.removeCallbacks(nfcPeriodic);
         if (nfc != null) try { nfc.disableReaderMode(this); } catch (Exception ignored) {}
         super.onPause();
     }
 
     @Override public void onWindowFocusChanged(boolean f) {
         super.onWindowFocusChanged(f);
-        if (f) hideSystemUi();
+        if (f) { hideSystemUi(); restartNfc("focus"); }
     }
 
     @Override protected void onNewIntent(Intent i) {
@@ -403,9 +416,67 @@ public class MainActivity extends Activity {
     // ---------- NFC ----------
 
     private void startNfc() {
-        if (nfc == null || "off".equals(prefs.getString("nfc_mode", "both"))) return;
+        if (nfc == null) return;
+        if ("off".equals(prefs.getString("nfc_mode", "both")) && nfcTestDialog == null) return;
         startNfcForced();
     }
+
+    /*
+     * Bekend Android-probleem: na slaapstand (scherm uit/aan) is reader mode soms niet meer actief,
+     * omdat enableReaderMode() in onResume te vroeg komt (NFC-dienst ziet de app nog niet als voorgrond)
+     * of omdat de NFC-chip na het ontwaken opnieuw wordt opgestart. Oplossing: reader mode opnieuw
+     * registreren bij scherm-aan, ontgrendelen, venster-focus en NFC-aan, elk met een korte vertraging
+     * en een tweede poging. Optioneel daarnaast periodiek verversen (nfc_refresh_seconds).
+     */
+    private boolean resumed = false;
+    private String nfcRestartReason = "";
+    private long nfcLastRestart = 0;
+    private int nfcRestarts = 0;
+    private final Runnable nfcRestart = new Runnable() {
+        public void run() {
+            if (!resumed || nfc == null) return;
+            try { nfc.disableReaderMode(MainActivity.this); } catch (Exception ignored) {}
+            startNfc();
+            nfcLastRestart = System.currentTimeMillis();
+            nfcRestarts++;
+        }
+    };
+    private final Runnable nfcPeriodic = new Runnable() {
+        public void run() {
+            if (resumed && System.currentTimeMillis() - lastTagTime > 3000) restartNfc("periodiek");
+            schedulePeriodicNfcRefresh();
+        }
+    };
+
+    private void restartNfc(String reason) {
+        if (nfc == null) return;
+        nfcRestartReason = reason;
+        handler.removeCallbacks(nfcRestart);
+        handler.postDelayed(nfcRestart, 400);
+        handler.postDelayed(nfcRestart, 1500); // tweede poging: NFC-chip is soms nog niet klaar
+    }
+
+    private void schedulePeriodicNfcRefresh() {
+        handler.removeCallbacks(nfcPeriodic);
+        int sec = prefs.getInt("nfc_refresh_seconds", 0);
+        if (sec > 0) handler.postDelayed(nfcPeriodic, sec * 1000L);
+    }
+
+    private final BroadcastReceiver wakeReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+            String a = i.getAction();
+            if (NfcAdapter.ACTION_ADAPTER_STATE_CHANGED.equals(a)) {
+                if (i.getIntExtra(NfcAdapter.EXTRA_ADAPTER_STATE, 0) == NfcAdapter.STATE_ON) restartNfc("NFC aan");
+            } else if (Intent.ACTION_SCREEN_ON.equals(a)) {
+                restartNfc("scherm aan");
+            } else if (Intent.ACTION_USER_PRESENT.equals(a)) {
+                restartNfc("ontgrendeld");
+            }
+        }
+    };
+
+    private long lastTagTime = 0;
+    private String lastTagUid = "";
 
     private void startNfcForced() {
         if (nfc == null) return;
@@ -421,6 +492,11 @@ public class MainActivity extends Activity {
     /** Wordt op een achtergrondthread aangeroepen. */
     private void handleTag(Tag tag) {
         final String uid = formatUid(tag.getId());
+        long now = System.currentTimeMillis();
+        boolean dup = uid.equals(lastTagUid) && now - lastTagTime < prefs.getInt("nfc_debounce_ms", 1500);
+        lastTagTime = now;
+        lastTagUid = uid;
+        if (dup) return; // zelfde tag nog in het veld (bv. na herstart reader mode): niet dubbel doorgeven
         final JSONObject o = new JSONObject();
         final JSONArray records = new JSONArray();
         String firstText = null;
@@ -653,6 +729,8 @@ public class MainActivity extends Activity {
             "Wat typen\n" + labelOf(NFC_VAL_L, NFC_VAL_V, prefs.getString("nfc_keyboard_value", "uid")),
             "Enter na typen: " + onOff(prefs.getBoolean("nfc_send_enter", true)),
             "NFC testen",
+            "NFC nu herstarten\n" + nfcStatus(),
+            "Periodiek verversen: " + (prefs.getInt("nfc_refresh_seconds", 0) > 0 ? "elke " + prefs.getInt("nfc_refresh_seconds", 0) + " s" : "uit"),
             "NFC in Android aan/uit zetten"
         };
         list("NFC (hardware: " + hw + ")", items, new Choice() {
@@ -663,7 +741,14 @@ public class MainActivity extends Activity {
                     case 2: single("Wat typen", NFC_VAL_L, NFC_VAL_V, prefs.getString("nfc_keyboard_value", "uid"), "nfc_keyboard_value", self); break;
                     case 3: prefs.edit().putBoolean("nfc_send_enter", !prefs.getBoolean("nfc_send_enter", true)).apply(); nfcMenu(); break;
                     case 4: nfcTest(self); break;
-                    case 5: kioskSuspended = true;
+                    case 5: restartNfc("handmatig"); toast("NFC wordt herstart");
+                            handler.postDelayed(new Runnable() { public void run() { nfcMenu(); } }, 1800); break;
+                    case 6: input("Reader mode elke X seconden verversen (0 = uit)", String.valueOf(prefs.getInt("nfc_refresh_seconds", 0)),
+                            InputType.TYPE_CLASS_NUMBER, new Choice() { public void chosen(int x) {
+                                try { prefs.edit().putInt("nfc_refresh_seconds", Math.max(0, Integer.parseInt(inputValue))).apply(); }
+                                catch (NumberFormatException e) { toast("Ongeldig getal"); }
+                                schedulePeriodicNfcRefresh(); nfcMenu(); } }, self); break;
+                    case 7: kioskSuspended = true;
                             try { stopLockTask(); } catch (Exception ignored) {}
                             try { startActivity(new Intent(Settings.ACTION_NFC_SETTINGS)); }
                             catch (Exception e) { startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS)); }
@@ -673,9 +758,14 @@ public class MainActivity extends Activity {
         }, new Runnable() { public void run() { adminMenu(); } });
     }
 
+    private String nfcStatus() {
+        if (nfcLastRestart == 0) return "nog niet herstart";
+        long ago = (System.currentTimeMillis() - nfcLastRestart) / 1000;
+        return "laatst herstart " + ago + " s geleden (" + nfcRestartReason + "), " + nfcRestarts + "x totaal";
+    }
+
     private void nfcTest(final Runnable back) {
         if (nfc == null) { toast("Dit toestel heeft geen NFC"); back.run(); return; }
-        startNfcForced();
         nfcTestDialog = new AlertDialog.Builder(this).setTitle("NFC testen")
             .setMessage("Houd een tag tegen de achterkant van het toestel…")
             .setNegativeButton("Terug", new DialogInterface.OnClickListener() {
@@ -685,6 +775,8 @@ public class MainActivity extends Activity {
             public void onDismiss(DialogInterface d) { nfcTestDialog = null; applyRuntimeSettings(); }
         });
         nfcTestDialog.show();
+        lastTagUid = ""; // in testmodus elke tag tonen
+        restartNfc("test");
     }
 
     private void otherMenu() {
@@ -745,8 +837,8 @@ public class MainActivity extends Activity {
     private void applyRuntimeSettings() {
         if (prefs.getBoolean("keep_screen_on", true)) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        if (nfc != null) try { nfc.disableReaderMode(this); } catch (Exception ignored) {}
-        startNfc();
+        restartNfc("instellingen");
+        schedulePeriodicNfcRefresh();
     }
 
     @SuppressWarnings("deprecation")
@@ -779,6 +871,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         try { unregisterReceiver(batteryReceiver); } catch (Exception ignored) {}
+        try { unregisterReceiver(wakeReceiver); } catch (Exception ignored) {}
         handler.removeCallbacksAndMessages(null);
         super.onDestroy();
     }

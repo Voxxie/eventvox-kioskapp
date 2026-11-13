@@ -83,6 +83,18 @@ Instellen in `webkiosk.properties` (`nfc_mode`):
 Veel toegangs- en kassasystemen gebruiken `dec_reversed`; kijk welk formaat jouw systeem verwacht.
 Je kunt alles testen met `nfc-test.html`.
 
+### NFC na slaapstand
+Op Android (ook Zebra) stopt NFC soms na slaapstand: na scherm-uit/aan is de *reader mode* van de app niet meer actief.
+De app vangt dat af door reader mode opnieuw te registreren bij **scherm aan**, **ontgrendelen**, **venster-focus** en
+**NFC weer aan**, steeds met een tweede poging na 1,5 s (de NFC-chip is direct na het ontwaken soms nog niet klaar).
+Een tag die nog tegen het toestel ligt wordt daardoor niet dubbel doorgegeven (`nfc_debounce_ms`, standaard 1500).
+
+Werkt het op een toestel toch niet goed:
+- Beheermenu > NFC > **Periodiek verversen** (of `nfc_refresh_seconds=30`) als extra vangnet;
+- Beheermenu > NFC > **NFC nu herstarten** toont ook wanneer en waarom reader mode het laatst is herstart;
+- `keep_screen_on=true` (standaard) voorkomt slaapstand zolang de app open is. Met het scherm uit leest Android nooit NFC.
+
+
 ## Serienummer in de URL
 Standaard-URL: `https://eventvox.nl/scanterminal?serial={serial}`
 `{serial}` wordt vervangen door het serienummer van het toestel (`{model}` door het model). Eindigt de URL op `serial=`,
