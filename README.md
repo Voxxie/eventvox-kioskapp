@@ -92,7 +92,7 @@ Een tag die nog tegen het toestel ligt wordt daardoor niet dubbel doorgegeven (`
 Werkt het op een toestel toch niet goed:
 - Beheermenu > NFC > **Periodiek verversen** (of `nfc_refresh_seconds=30`) als extra vangnet;
 - Beheermenu > NFC > **NFC nu herstarten** toont ook wanneer en waarom reader mode het laatst is herstart;
-- `keep_screen_on=true` (standaard) voorkomt slaapstand zolang de app open is. Met het scherm uit leest Android nooit NFC.
+- Met het scherm uit leest Android nooit NFC. Wil je dat het scherm aan blijft: `keep_screen_on=true` (standaard uit).
 
 
 ## Serienummer in de URL
@@ -127,6 +127,21 @@ JSON.parse(WebKiosk.getDeviceInfo());    // { serial, model, manufacturer, andro
 
 ## Opnieuw bouwen
 `sudo apt install aapt apksigner zipalign android-sdk-platform-23 dalvik-exchange default-jdk && ./build.sh`
+
+## Automatische updates
+Bij elke release maakt de workflow ook een `update.json` (versie, download-URL, SHA-256, release-notes).
+De app controleert die **elke 6 uur** (en 1 minuut na het starten). Is er een nieuwere versie, dan:
+- downloadt hij de APK en controleert de SHA-256;
+- wacht hij tot het toestel **2 minuten niet is aangeraakt** (geen update midden in een scan);
+- installeert hij **stil** (als device owner) en start daarna vanzelf opnieuw op.
+
+Beheermenu > **Updates**: nu controleren (met release-notes en knop *Nu installeren*), automatisch bijwerken aan/uit,
+interval, en het update-adres. In `webkiosk.properties`: `auto_update`, `update_check_hours`, `update_url`.
+
+> **Let op:** de toestellen moeten `update.json` en de APK zonder inloggen kunnen downloaden.
+> Het standaard-adres is `https://github.com/Voxxie/eventvox-kioskapp/releases/latest/download/update.json`;
+> dat werkt alleen als de repository **openbaar** is. Bij een private repository zet je `update.json` + `webkiosk.apk`
+> op een eigen webserver en vul je dat adres in bij `update_url` (de `url` in update.json mag relatief zijn, bv. `webkiosk.apk`).
 
 ## Releases (APK automatisch bouwen op GitHub)
 Bij elke **gepubliceerde release** bouwt GitHub Actions (`.github/workflows/release.yml`) een ondertekende APK

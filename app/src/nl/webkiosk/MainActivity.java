@@ -22,7 +22,7 @@ import java.util.Properties;
 
 /**
  * Fullscreen kiosk-browser. Configuratie (hoogste prioriteit eerst):
- *  1. /sdcard/webkiosk.properties  (url=..., pin=..., keep_screen_on=true, reload_minutes=0)
+ *  1. /sdcard/webkiosk.properties  (url=..., pin=..., keep_screen_on=false, reload_minutes=0)
  *  2. intent-extras bij starten (adb: am start -n nl.webkiosk/.MainActivity --es url https://...)
  *  3. eerder opgeslagen waarden / instellen via verborgen beheermenu
  * Beheermenu: tik 10x snel op dezelfde plek, voer PIN in.
@@ -81,7 +81,7 @@ public class MainActivity extends Activity {
         readIntentConfig(getIntent());
         readFileConfig();
 
-        if (prefs.getBoolean("keep_screen_on", true))
+        if (prefs.getBoolean("keep_screen_on", false))
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         web = new WebView(this);
@@ -155,6 +155,7 @@ public class MainActivity extends Activity {
         setContentView(web);
         loadHome();
         schedulePeriodicReload();
+        handler.postDelayed(updateCheck, 60000); // eerste controle 1 minuut na start
     }
 
     // ---------- configuratie ----------
@@ -199,7 +200,11 @@ public class MainActivity extends Activity {
                 String v = p.getProperty(key);
                 if (v != null && !v.trim().isEmpty()) e.putString(key, v.trim().toLowerCase());
             }
-            for (String key : new String[]{"nfc_refresh_seconds", "nfc_debounce_ms"}) {
+            String uu = p.getProperty("update_url");
+            if (uu != null) e.putString("update_url", uu.trim());
+            String au = p.getProperty("auto_update");
+            if (au != null) e.putBoolean("auto_update", Boolean.parseBoolean(au.trim()));
+            for (String key : new String[]{"nfc_refresh_seconds", "nfc_debounce_ms", "update_check_hours"}) {
                 String v = p.getProperty(key);
                 if (v != null) try { e.putInt(key, Integer.parseInt(v.trim())); } catch (NumberFormatException ignored) {}
             }
@@ -607,9 +612,130 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ---------- updates ----------
+
+    private long lastTouch = 0;
+    private volatile boolean updateBusy = false;
+    private static final long IDLE_BEFORE_INSTALL_MS = 120000;
+
+    private String updateUrl() {
+        String u = prefs.getString("update_url", "");
+        return u.isEmpty() ? Updater.DEFAULT_URL : u;
+    }
+
+    private final Runnable updateCheck = new Runnable() {
+        public void run() {
+            handler.removeCallbacks(updateCheck);
+            int hours = prefs.getInt("update_check_hours", 6);
+            if (hours > 0) handler.postDelayed(updateCheck, hours * 3600000L);
+            if (hours > 0 && prefs.getBoolean("auto_update", true)) checkForUpdate(false);
+        }
+    };
+
+    /** interactive=true: resultaat tonen in een dialoog; anders stil en automatisch installeren. */
+    private void checkForUpdate(final boolean interactive) {
+        if (updateBusy) { if (interactive) toast("Update is al bezig"); return; }
+        updateBusy = true;
+        final String url = updateUrl();
+        new Thread(new Runnable() { public void run() {
+            Updater.Info info = null; String err = null;
+            try { info = Updater.fetch(url); } catch (Exception e) { err = e.getMessage(); }
+            final Updater.Info fi = info; final String fe = err;
+            prefs.edit().putLong("update_last_check", System.currentTimeMillis())
+                .putString("update_last_result", fe != null ? "fout: " + fe
+                    : (fi.versionCode > Updater.currentVersionCode(MainActivity.this) ? "nieuw: " + fi.versionName : "actueel")).apply();
+            updateBusy = false;
+            runOnUiThread(new Runnable() { public void run() { onUpdateInfo(fi, fe, interactive); } });
+        }}).start();
+    }
+
+    private void onUpdateInfo(final Updater.Info info, String err, boolean interactive) {
+        int cur = Updater.currentVersionCode(this);
+        if (!interactive) {
+            if (info != null && info.versionCode > cur) installWhenIdle(info);
+            return;
+        }
+        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle("Updates");
+        final Runnable back = new Runnable() { public void run() { updateMenu(); } };
+        if (err != null) {
+            b.setMessage("Controleren mislukt:\n" + err + "\n\nUpdate-adres:\n" + updateUrl());
+        } else if (info.versionCode > cur) {
+            b.setMessage("Nieuwe versie beschikbaar: " + info.versionName + "\nHuidig: " + appVersion()
+                + (info.notes.isEmpty() ? "" : "\n\n" + info.notes));
+            b.setPositiveButton("Nu installeren", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int w) { downloadAndInstall(info, true); }
+            });
+        } else {
+            b.setMessage("Je hebt de nieuwste versie (" + appVersion() + ").");
+        }
+        b.setNegativeButton("Terug", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface d, int w) { back.run(); }
+        }).show();
+    }
+
+    /** Niet installeren terwijl iemand het toestel gebruikt: wacht tot 2 minuten geen aanraking. */
+    private void installWhenIdle(final Updater.Info info) {
+        long idle = SystemClock.uptimeMillis() - lastTouch;
+        if (lastTouch != 0 && idle < IDLE_BEFORE_INSTALL_MS) {
+            handler.postDelayed(new Runnable() { public void run() { installWhenIdle(info); } }, 300000);
+            return;
+        }
+        downloadAndInstall(info, false);
+    }
+
+    private void downloadAndInstall(final Updater.Info info, final boolean interactive) {
+        if (updateBusy) return;
+        updateBusy = true;
+        if (interactive) toast("Update " + info.versionName + " downloaden…");
+        new Thread(new Runnable() { public void run() {
+            String err = null;
+            try {
+                java.io.File apk = Updater.download(MainActivity.this, info);
+                Updater.install(MainActivity.this, apk);
+            } catch (Exception e) { err = e.getMessage(); }
+            updateBusy = false;
+            if (err != null) {
+                final String fe = err;
+                prefs.edit().putString("update_last_result", "fout: " + fe).apply();
+                runOnUiThread(new Runnable() { public void run() { if (interactive) toast("Update mislukt: " + fe); } });
+            }
+        }}).start();
+    }
+
+    private void updateMenu() {
+        final Runnable self = new Runnable() { public void run() { updateMenu(); } };
+        long last = prefs.getLong("update_last_check", 0);
+        String lastTxt = last == 0 ? "nog niet" : new java.text.SimpleDateFormat("d-M HH:mm").format(new java.util.Date(last))
+            + " (" + prefs.getString("update_last_result", "") + ")";
+        int hours = prefs.getInt("update_check_hours", 6);
+        String[] items = {
+            "Nu controleren op updates\nHuidige versie " + appVersion() + " · laatst: " + lastTxt,
+            "Automatisch bijwerken: " + onOff(prefs.getBoolean("auto_update", true)),
+            "Controleren elke: " + (hours > 0 ? hours + " uur" : "uit"),
+            "Update-adres\n" + updateUrl()
+        };
+        list("Updates", items, new Choice() {
+            public void chosen(int w) {
+                switch (w) {
+                    case 0: toast("Controleren…"); checkForUpdate(true); break;
+                    case 1: prefs.edit().putBoolean("auto_update", !prefs.getBoolean("auto_update", true)).apply(); updateMenu(); break;
+                    case 2: input("Elke X uur controleren (0 = uit)", String.valueOf(prefs.getInt("update_check_hours", 6)), InputType.TYPE_CLASS_NUMBER,
+                            new Choice() { public void chosen(int x) {
+                                try { prefs.edit().putInt("update_check_hours", Math.max(0, Integer.parseInt(inputValue))).apply(); }
+                                catch (NumberFormatException e) { toast("Ongeldig getal"); }
+                                handler.removeCallbacks(updateCheck); handler.postDelayed(updateCheck, 60000);
+                                updateMenu(); } }, self); break;
+                    case 3: input("Update-adres (leeg = standaard)", prefs.getString("update_url", ""), InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI,
+                            new Choice() { public void chosen(int x) { prefs.edit().putString("update_url", inputValue).apply(); updateMenu(); } }, self); break;
+                }
+            }
+        }, new Runnable() { public void run() { adminMenu(); } });
+    }
+
     // ---------- verborgen beheermenu ----------
 
     @Override public boolean dispatchTouchEvent(MotionEvent ev) {
+        lastTouch = SystemClock.uptimeMillis();
         if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
             float spot = SAME_SPOT_DP * getResources().getDisplayMetrics().density;
             long now = SystemClock.uptimeMillis();
@@ -684,6 +810,7 @@ public class MainActivity extends Activity {
             "Website-adres wijzigen\n" + url,
             "NFC-instellingen\n" + labelOf(NFC_MODE_L, NFC_MODE_V, prefs.getString("nfc_mode", "both")),
             "Overige instellingen",
+            "Updates",
             "Pagina herladen",
             "Cache en cookies wissen",
             "App sluiten (naar Android-instellingen)",
@@ -695,13 +822,14 @@ public class MainActivity extends Activity {
                     case 0: editUrl(); break;
                     case 1: nfcMenu(); break;
                     case 2: otherMenu(); break;
-                    case 3: loadHome(); break;
-                    case 4: web.clearCache(true); CookieManager.getInstance().removeAllCookies(null);
+                    case 3: updateMenu(); break;
+                    case 4: loadHome(); break;
+                    case 5: web.clearCache(true); CookieManager.getInstance().removeAllCookies(null);
                             WebStorage.getInstance().deleteAllData(); loadHome();
                             toast("Cache en cookies gewist"); break;
-                    case 5: confirm("App sluiten?", "De kiosk wordt tijdelijk verlaten. Open EventVOX-Webkiosk opnieuw (of herstart het toestel) om terug te gaan.",
+                    case 6: confirm("App sluiten?", "De kiosk wordt tijdelijk verlaten. Open EventVOX-Webkiosk opnieuw (of herstart het toestel) om terug te gaan.",
                                 new Runnable() { public void run() { leaveKiosk(); } }); break;
-                    case 6: confirm("Kiosk-modus uitschakelen?", "Het toestel wordt weer een normaal Android-toestel. Opnieuw inrichten kan alleen via het provision-script.",
+                    case 7: confirm("Kiosk-modus uitschakelen?", "Het toestel wordt weer een normaal Android-toestel. Opnieuw inrichten kan alleen via het provision-script.",
                                 new Runnable() { public void run() { removeOwner(); } }); break;
                 }
             }
@@ -785,7 +913,7 @@ public class MainActivity extends Activity {
         String[] items = {
             "Beheer-PIN wijzigen",
             "Aantal tikken voor dit menu: " + prefs.getInt("menu_taps", 10),
-            "Scherm altijd aan: " + onOff(prefs.getBoolean("keep_screen_on", true)),
+            "Scherm altijd aan: " + onOff(prefs.getBoolean("keep_screen_on", false)),
             "Automatisch herladen: " + (reload > 0 ? "elke " + reload + " min" : "uit"),
             "SSL-fouten negeren: " + onOff(prefs.getBoolean("ignore_ssl_errors", false)),
             "Wifi-instellingen"
@@ -803,7 +931,7 @@ public class MainActivity extends Activity {
                                 try { int n = Integer.parseInt(inputValue); if (n >= 5 && n <= 20) prefs.edit().putInt("menu_taps", n).apply(); else toast("Kies 5 t/m 20"); }
                                 catch (NumberFormatException e) { toast("Ongeldig getal"); }
                                 otherMenu(); } }, self); break;
-                    case 2: prefs.edit().putBoolean("keep_screen_on", !prefs.getBoolean("keep_screen_on", true)).apply();
+                    case 2: prefs.edit().putBoolean("keep_screen_on", !prefs.getBoolean("keep_screen_on", false)).apply();
                             applyRuntimeSettings(); otherMenu(); break;
                     case 3: input("Herladen elke X minuten (0 = uit)", String.valueOf(reload), InputType.TYPE_CLASS_NUMBER,
                             new Choice() { public void chosen(int x) {
@@ -835,7 +963,7 @@ public class MainActivity extends Activity {
     }
 
     private void applyRuntimeSettings() {
-        if (prefs.getBoolean("keep_screen_on", true)) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (prefs.getBoolean("keep_screen_on", false)) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         restartNfc("instellingen");
         schedulePeriodicNfcRefresh();

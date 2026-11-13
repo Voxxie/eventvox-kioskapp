@@ -68,6 +68,21 @@ jobs:
           cp webkiosk.properties provision.sh provision.bat nfc-test.html README.md dist/
           (cd dist && zip -q "../webkiosk-${VERSION_NAME}.zip" * && sha256sum webkiosk.apk > webkiosk.apk.sha256)
 
+      - name: update.json maken (voor automatische updates op de toestellen)
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          NOTES: ${{ github.event.release.body }}
+        run: |
+          jq -n \
+            --argjson code "${{ steps.version.outputs.code }}" \
+            --arg name "${{ steps.version.outputs.name }}" \
+            --arg url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/webkiosk.apk" \
+            --arg sha "$(cut -d' ' -f1 dist/webkiosk.apk.sha256)" \
+            --arg notes "$NOTES" \
+            '{versionCode:$code, versionName:$name, url:$url, sha256:$sha, notes:$notes}' > dist/update.json
+          cat dist/update.json
+
       - name: Aan release hangen
         if: github.event_name == 'release'
         env:
@@ -77,7 +92,7 @@ jobs:
           VERSION="${{ steps.version.outputs.name }}"
           cp dist/webkiosk.apk "dist/webkiosk-${VERSION}.apk"
           gh release upload "$TAG" "dist/webkiosk-${VERSION}.apk" dist/webkiosk.apk dist/webkiosk.apk.sha256 \
-            "webkiosk-${VERSION}.zip" --clobber
+            dist/update.json "webkiosk-${VERSION}.zip" --clobber
 
       - name: Test-build bewaren
         if: github.event_name != 'release'
