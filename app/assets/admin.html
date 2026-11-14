@@ -98,6 +98,12 @@
       <p class="hint" id="scan-status"></p>
       <p class="hint">Scan hier iets om te testen: zolang dit scherm open is gaat het niet naar de website.</p>
       <div class="row"><button class="btn" data-action="dataWedge">Profiel opnieuw instellen</button></div>
+      <div class="toggle-row"><span>Trillen bij een scanuitslag<small>zoals de scanterminal het vraagt: 1× kort toegelaten, 2× waarschuwing, 3× lang geweigerd</small></span><label class="sw"><input type="checkbox" data-setting="vibrate"><i></i></label></div>
+      <div class="row">
+        <button class="btn" data-action="vibrateTest" data-arg="ok">Test toegelaten</button>
+        <button class="btn" data-action="vibrateTest" data-arg="warning">Waarschuwing</button>
+        <button class="btn" data-action="vibrateTest" data-arg="error">Geweigerd</button>
+      </div>
     </div>
 
     <div class="card">

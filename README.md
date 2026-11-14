@@ -137,6 +137,12 @@ bij elke heartbeat van een terminal; de terminalpagina in EventVOX toont daaruit
 (bv. *EventVOX-Webkiosk 0.0.1*). Wil je de versie ook in de URL: gebruik `{version}`, bv.
 `https://eventvox.nl/scanterminal?serial={serial}&app={version}`.
 
+## Trillen
+De app levert `navigator.vibrate()` zelf, via de trilmotor van Android. De EventVOX-scanterminal roept hem bij elke
+uitslag aan (1× kort toegelaten, 2× kort waarschuwing, 3× lang geweigerd); in een gewone WebView zou dat niet trillen,
+want die trilt alleen na een tik op de pagina, en een scan met DataWedge of NFC is geen tik. Uit te zetten met
+`vibrate=false` of in het beheerscherm (Scanner), met testknoppen voor de drie patronen.
+
 ## Accu-slijtage in EventVOX
 Op een Zebra geeft Android extra gegevens over de accu zelf. De app zet die in `WebKiosk.getBattery().pack`
 (gezondheid %, laadcycli, vervangadvies van Zebra, onderdeel- en serienummer, productiedatum, capaciteit; alleen wat het

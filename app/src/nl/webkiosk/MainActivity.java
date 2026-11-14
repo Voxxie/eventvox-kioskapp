@@ -114,13 +114,13 @@ public class MainActivity extends Activity {
             }
             @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap f) {
                 pageError = false;
-                v.evaluateJavascript(BATTERY_POLYFILL, null); // zo vroeg mogelijk: vóór de scripts van de pagina
+                v.evaluateJavascript(BATTERY_POLYFILL + VIBRATE_POLYFILL, null); // zo vroeg mogelijk: vóór de scripts van de pagina
             }
             @Override public void onPageCommitVisible(WebView v, String url) {
-                v.evaluateJavascript(BATTERY_POLYFILL, null);
+                v.evaluateJavascript(BATTERY_POLYFILL + VIBRATE_POLYFILL, null);
             }
             @Override public void onPageFinished(WebView v, String url) {
-                v.evaluateJavascript(BATTERY_POLYFILL, null);
+                v.evaluateJavascript(BATTERY_POLYFILL + VIBRATE_POLYFILL, null);
                 focusWeb();
             }
             @SuppressWarnings("deprecation")
@@ -146,6 +146,8 @@ public class MainActivity extends Activity {
             @JavascriptInterface public boolean nfcEnabled() { return nfc != null && nfc.isEnabled(); }
             @JavascriptInterface public String getBattery() { return batteryJson(lastBattery).toString(); }
             @JavascriptInterface public String getSerial() { return serial(); }
+            /** pattern: JSON-array in ms (aan, uit, aan, ...) of één getal; [] of 0 stopt het trillen. */
+            @JavascriptInterface public boolean vibrate(String pattern) { return doVibrate(pattern); }
             @JavascriptInterface public String getDeviceInfo() {
                 JSONObject o = new JSONObject();
                 try {
@@ -217,7 +219,7 @@ public class MainActivity extends Activity {
                 String v = p.getProperty(key);
                 if (v != null && !v.trim().isEmpty()) e.putString(key, v.trim());
             }
-            for (String key : new String[]{"keep_screen_on", "ignore_ssl_errors"}) {
+            for (String key : new String[]{"keep_screen_on", "ignore_ssl_errors", "vibrate"}) {
                 String v = p.getProperty(key);
                 if (v != null) e.putBoolean(key, Boolean.parseBoolean(v.trim()));
             }
@@ -374,6 +376,22 @@ public class MainActivity extends Activity {
         int min = prefs.getInt("reload_minutes", 0);
         if (min > 0) handler.postDelayed(periodicReload, min * 60000L);
     }
+
+    /**
+     * navigator.vibrate via de trilmotor van Android (WebKiosk.vibrate), zoals de EventVOX-scanterminal hem per uitslag
+     * aanroept (js/scan-texts.js VIBRATE). De WebView zelf trilt alleen na een tik op de pagina en met de VIBRATE-
+     * toestemming; een scan met DataWedge of NFC is geen tik, dus zonder dit zou er niets trillen. Elke waarde wordt
+     * 0-10000 ms, hoogstens 32 stappen, zoals in Chrome.
+     */
+    private static final String VIBRATE_POLYFILL =
+        "(function(){"
+          + "if(!window.WebKiosk||typeof WebKiosk.vibrate!=='function'||window.__wkVibrate)return;window.__wkVibrate=1;"
+          + "var vib=function(p){try{var a=Array.isArray(p)?p:[p];"
+          + "a=a.slice(0,32).map(function(x){x=Number(x);return isFinite(x)&&x>0?Math.min(Math.round(x),10000):0;});"
+          + "return WebKiosk.vibrate(JSON.stringify(a))!==false;}catch(e){return false;}};"
+          + "try{Object.defineProperty(Navigator.prototype,'vibrate',{value:vib,configurable:true,writable:true});}catch(e){}"
+          + "try{Object.defineProperty(navigator,'vibrate',{value:vib,configurable:true,writable:true});}catch(e){navigator.vibrate=vib;}"
+          + "})();";
 
     /**
      * Battery Status API op basis van Android's BatteryManager (via WebKiosk.getBattery), ook als de WebView hem niet heeft.
@@ -703,6 +721,34 @@ public class MainActivity extends Activity {
             web.evaluateJavascript(js, null);
         }
         if (mode.equals("keyboard") || mode.equals("both")) typeText(kbValue, prefs.getBoolean("nfc_send_enter", true));
+    }
+
+    // ---------- trillen ----------
+
+    /** Trillen volgens een webpatroon [aan, uit, aan, ...] (ms); uit met vibrate=false in de config of het beheerscherm. */
+    @SuppressWarnings("deprecation")
+    private boolean doVibrate(String json) {
+        try {
+            android.os.Vibrator v = (android.os.Vibrator) getSystemService(VIBRATOR_SERVICE);
+            if (v == null || !v.hasVibrator()) return false;
+            JSONArray a;
+            String t = json == null ? "" : json.trim();
+            a = t.startsWith("[") ? new JSONArray(t) : new JSONArray().put(t.isEmpty() ? 0 : Double.parseDouble(t));
+            boolean any = false;
+            long[] pattern = new long[a.length() + 1]; // Android: eerst een wachttijd, dan aan/uit
+            for (int i = 0; i < a.length() && i < 32; i++) {
+                long ms = Math.max(0, Math.min(10000, Math.round(a.optDouble(i, 0))));
+                pattern[i + 1] = ms;
+                if (i % 2 == 0 && ms > 0) any = true;
+            }
+            v.cancel();
+            if (!any) return true; // 0 of []: stoppen
+            if (!prefs.getBoolean("vibrate", true)) return true; // uitgezet: de pagina hoeft dat niet te weten
+            v.vibrate(pattern, -1);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     // ---------- toetsenbord-focus ----------
@@ -1071,6 +1117,7 @@ public class MainActivity extends Activity {
         st.put("keep_screen_on", prefs.getBoolean("keep_screen_on", false));
         st.put("reload_minutes", prefs.getInt("reload_minutes", 0));
         st.put("ignore_ssl_errors", prefs.getBoolean("ignore_ssl_errors", false));
+        st.put("vibrate", prefs.getBoolean("vibrate", true));
         st.put("menu_taps", prefs.getInt("menu_taps", 10));
         st.put("scan_mode", scanMode());
         st.put("datawedge", manageDataWedge() ? "app" : "off");
@@ -1144,7 +1191,7 @@ public class MainActivity extends Activity {
     }
 
     private static final java.util.List<String> STRING_KEYS = java.util.Arrays.asList("nfc_mode", "nfc_uid_format", "nfc_keyboard_value", "scan_mode", "datawedge");
-    private static final java.util.List<String> BOOL_KEYS = java.util.Arrays.asList("nfc_send_enter", "auto_update", "keep_screen_on", "ignore_ssl_errors");
+    private static final java.util.List<String> BOOL_KEYS = java.util.Arrays.asList("nfc_send_enter", "auto_update", "keep_screen_on", "ignore_ssl_errors", "vibrate");
     private static final java.util.List<String> INT_KEYS = java.util.Arrays.asList("nfc_refresh_seconds", "update_check_hours", "reload_minutes", "menu_taps");
 
     /** Eén instelling opslaan en toepassen; geeft een foutmelding of null. */
@@ -1200,6 +1247,12 @@ public class MainActivity extends Activity {
     private void adminAction(String name, String arg) {
         switch (name) {
             case "close": hideAdmin(); break;
+            case "vibrateTest":
+                // de patronen van de scanterminal: toegelaten, waarschuwing, geweigerd
+                String pat = "warning".equals(arg) ? "[90,110,90]" : "error".equals(arg) ? "[350,150,350,150,350]" : "[70]";
+                if (!prefs.getBoolean("vibrate", true)) adminToast("Trillen staat uit");
+                else if (!doVibrate(pat)) adminToast("Dit toestel kan niet trillen");
+                break;
             case "dataWedge":
                 setupDataWedge();
                 adminToast("DataWedge-profiel wordt ingesteld");
