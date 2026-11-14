@@ -137,6 +137,12 @@ bij elke heartbeat van een terminal; de terminalpagina in EventVOX toont daaruit
 (bv. *EventVOX-Webkiosk 0.0.1*). Wil je de versie ook in de URL: gebruik `{version}`, bv.
 `https://eventvox.nl/scanterminal?serial={serial}&app={version}`.
 
+## Wifi-sterkte
+`WebKiosk.getWifi()` geeft `{ connected, level 0-4, rssi (dBm), ssid, link_speed (Mbps), frequency (MHz) }`; bij een
+andere stand (verbonden, niveau, netwerk) volgt het event `webkiosk-wifi`. De EventVOX-scanterminal toont dat rechtsboven
+als vier streepjes (rood bij zwak of geen verbinding). De netwerknaam geeft Android alleen met locatie-toestemming (die
+krijgt de app als device owner) en met locatie aan op het toestel; anders ontbreekt `ssid`.
+
 ## Trillen
 De app levert `navigator.vibrate()` zelf, via de trilmotor van Android. De EventVOX-scanterminal roept hem bij elke
 uitslag aan (1× kort toegelaten, 2× kort waarschuwing, 3× lang geweigerd); in een gewone WebView zou dat niet trillen,

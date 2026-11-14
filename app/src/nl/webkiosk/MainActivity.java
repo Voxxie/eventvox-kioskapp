@@ -148,6 +148,8 @@ public class MainActivity extends Activity {
             @JavascriptInterface public String getSerial() { return serial(); }
             /** pattern: JSON-array in ms (aan, uit, aan, ...) of één getal; [] of 0 stopt het trillen. */
             @JavascriptInterface public boolean vibrate(String pattern) { return doVibrate(pattern); }
+            /** De wifi-verbinding: { connected, level 0-4, rssi (dBm), ssid?, link_speed (Mbps), frequency (MHz) } */
+            @JavascriptInterface public String getWifi() { return wifiJson().toString(); }
             @JavascriptInterface public String getDeviceInfo() {
                 JSONObject o = new JSONObject();
                 try {
@@ -164,6 +166,10 @@ public class MainActivity extends Activity {
         wf.addAction(Intent.ACTION_USER_PRESENT);
         wf.addAction(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED);
         registerReceiver(wakeReceiver, wf);
+        IntentFilter wifiF = new IntentFilter(android.net.wifi.WifiManager.RSSI_CHANGED_ACTION);
+        wifiF.addAction(android.net.wifi.WifiManager.NETWORK_STATE_CHANGED_ACTION);
+        wifiF.addAction(android.net.wifi.WifiManager.WIFI_STATE_CHANGED_ACTION);
+        registerReceiver(wifiReceiver, wifiF);
         // DataWedge-scans en de uitslag van het instellen (met en zonder categorie: DataWedge zet er geen bij)
         IntentFilter df = new IntentFilter(DataWedge.SCAN_ACTION);
         df.addAction(DataWedge.RESULT_ACTION);
@@ -451,6 +457,9 @@ public class MainActivity extends Activity {
                     android.Manifest.permission.READ_EXTERNAL_STORAGE, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
                 dpm.setPermissionGrantState(admin, getPackageName(),
                     android.Manifest.permission.READ_PHONE_STATE, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+                // de wifi-netwerknaam (SSID) geeft Android alleen met locatie-toestemming
+                dpm.setPermissionGrantState(admin, getPackageName(),
+                    android.Manifest.permission.ACCESS_COARSE_LOCATION, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
                 dpm.setStatusBarDisabled(admin, true);
                 dpm.setKeyguardDisabled(admin, true);
             }
@@ -722,6 +731,46 @@ public class MainActivity extends Activity {
         }
         if (mode.equals("keyboard") || mode.equals("both")) typeText(kbValue, prefs.getBoolean("nfc_send_enter", true));
     }
+
+    // ---------- wifi-sterkte ----------
+
+    @SuppressWarnings("deprecation")
+    private JSONObject wifiJson() {
+        JSONObject o = new JSONObject();
+        try {
+            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            android.net.NetworkInfo ni = cm == null ? null : cm.getNetworkInfo(android.net.ConnectivityManager.TYPE_WIFI);
+            android.net.wifi.WifiInfo info = wm == null ? null : wm.getConnectionInfo();
+            boolean connected = ni != null && ni.isConnected() && info != null && info.getNetworkId() != -1;
+            o.put("connected", connected);
+            o.put("enabled", wm != null && wm.isWifiEnabled());
+            if (connected) {
+                int rssi = info.getRssi();
+                o.put("rssi", rssi);
+                o.put("level", android.net.wifi.WifiManager.calculateSignalLevel(rssi, 5)); // 0-4
+                o.put("link_speed", info.getLinkSpeed());
+                o.put("frequency", info.getFrequency());
+                String ssid = info.getSSID();
+                // Zonder locatie-toestemming of met locatie uit geeft Android "<unknown ssid>"
+                if (ssid != null && !ssid.contains("unknown ssid")) o.put("ssid", ssid.replaceAll("^\"|\"$", ""));
+            }
+        } catch (Exception ignored) {}
+        return o;
+    }
+
+    private String lastWifiSig = "";
+    private final BroadcastReceiver wifiReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+            JSONObject w = wifiJson();
+            // Alleen bij een andere stand, niet bij elke dBm: anders tientallen events per minuut
+            String sig = w.optBoolean("connected") + "|" + w.optInt("level", -1) + "|" + w.optString("ssid");
+            if (web == null || sig.equals(lastWifiSig)) return;
+            lastWifiSig = sig;
+            web.evaluateJavascript("(function(d){try{window.dispatchEvent(new CustomEvent('webkiosk-wifi',{detail:d}));}catch(e){}"
+                + "if(typeof window.onWebKioskWifi==='function')window.onWebKioskWifi(d);})(" + w + ");", null);
+        }
+    };
 
     // ---------- trillen ----------
 
@@ -1302,6 +1351,7 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         try { unregisterReceiver(batteryReceiver); } catch (Exception ignored) {}
         try { unregisterReceiver(wakeReceiver); } catch (Exception ignored) {}
+        try { unregisterReceiver(wifiReceiver); } catch (Exception ignored) {}
         try { unregisterReceiver(scanReceiver); } catch (Exception ignored) {}
         try { unregisterReceiver(scanReceiver2); } catch (Exception ignored) {}
         handler.removeCallbacksAndMessages(null);
