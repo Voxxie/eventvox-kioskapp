@@ -100,7 +100,7 @@ de frontend toont "Kiosk-app" (`kioskAppText`).
 | `getWifi()` | JSON `{ connected, enabled, level 0-4, rssi, ssid?, link_speed, frequency }` |
 | `getSerial()`, `getDeviceInfo()` | serienummer; JSON `{ serial, model, manufacturer, android, sdk, build, appVersion }` |
 | `vibrate(pattern)` | trillen (JSON-array of getal, zoals `navigator.vibrate`) |
-| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, nfc_restarts, clock_skew_s, settings_version, command_done, orientation, wifi, update { checked_at, result }, log? }`; `log` alleen de eerste keer na `requestDiagnostics()` |
+| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, nfc_restarts, clock_skew_s, settings_version, command_done, orientation, wifi, update { checked_at, result }, location?, log? }`; `location` `{ lat, lon, accuracy_m, provider, at, wifi { ssid, bssid, rssi } }` alleen in de 10 minuten na Zoek mij; `log` alleen de eerste keer na `requestDiagnostics()` |
 | `requestDiagnostics()` | het logboek gaat mee met de volgende `getStatus()` |
 | `command(json)` | opdracht uit EventVOX `{ id, command: reload\|restart\|update\|locate }`; elke id één keer (`last_command_id`), gemeld als `command_done` in `getStatus()` |
 | `applySettings(json)` | instellingen uit EventVOX `{ version, values }`; elke versie één keer, via `applySetting()` (nooit `url`, `pin`, `update_url`) |
@@ -145,6 +145,9 @@ in), dan vervalt de kopie. Verander die sleutelnaam nooit zonder de frontend mee
   dimmen (alleen met "scherm altijd aan", na 2 min naar 15%).
 - Meldingen bovenaan (`bannerBox`, tikken gaan erdoor): accu bijna leeg (`low_battery`, 15%), klok wijkt > 2 min af
   (HEAD naar de website, Date-header; als device owner `setAutoTimeRequired`), offline met knop.
+- Locatie alleen na **Zoek mij** (hoogstens 60 s GPS/netwerk, stopt bij ±20 m), 10 minuten meegestuurd; EventVOX
+  bewaart alleen de laatste, 24 uur (migratie 133). Nooit zomaar of periodiek een locatie vastleggen: het toestel wordt door
+  een persoon gedragen. Geen coördinaten in het logboek.
 - Instellingen uit EventVOX gelden één keer per versie; een latere wijziging op het toestel blijft tot EventVOX een
   nieuwe versie stuurt. Een nieuwe instelling die EventVOX mag zetten: ook in `Terminals::KIOSK_SETTINGS` (backend) en
   het formulier in de frontend.

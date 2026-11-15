@@ -250,6 +250,9 @@ interval, en het update-adres. In `webkiosk.properties`: `auto_update`, `update_
 Op de terminalpagina (kaart Kiosk-app) en voor een selectie in de terminallijst:
 - **Opdrachten**: *Pagina herladen*, *App herstarten*, *Nu bijwerken* (zonder te wachten tot het toestel rustig is) en
   *Zoek mij* (30 s piepen, trillen en knipperen; een tik stopt het). Elke opdracht wordt precies één keer uitgevoerd.
+- **Locatie bij Zoek mij**: het toestel zoekt hoogstens een minuut zijn positie (GPS, buiten het nauwkeurigst) en stuurt die
+  mee met het wifi-toegangspunt waarmee het verbonden is (binnen vaak handiger). EventVOX toont hem op een kaartje bij de
+  terminal. Alleen de laatste locatie, 24 uur bewaard; er wordt nooit zomaar een locatie vastgelegd.
 - **Kiosk-instellingen**: volume, dimmen, scherm altijd aan, nachtelijk herladen, kanaal, automatisch bijwerken, NFC,
   scanner, trillen, accugrens en schermstand. Niet het adres en de PIN: die blijven op het toestel. Instellingen uit
   EventVOX worden één keer toegepast; wie daarna op het toestel iets wijzigt, houdt dat tot EventVOX opnieuw iets stuurt.

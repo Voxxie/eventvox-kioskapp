@@ -511,6 +511,9 @@ public class MainActivity extends Activity {
                 // de wifi-netwerknaam (SSID) geeft Android alleen met locatie-toestemming
                 dpm.setPermissionGrantState(admin, getPackageName(),
                     android.Manifest.permission.ACCESS_COARSE_LOCATION, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+                // GPS voor "Zoek mij" (alleen dan wordt de locatie bepaald)
+                dpm.setPermissionGrantState(admin, getPackageName(),
+                    android.Manifest.permission.ACCESS_FINE_LOCATION, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
                 dpm.setStatusBarDisabled(admin, true);
                 dpm.setKeyguardDisabled(admin, true);
             }
@@ -1306,6 +1309,7 @@ public class MainActivity extends Activity {
             o.put("settings_version", prefs.getInt("remote_settings_version", 0));
             o.put("command_done", prefs.getInt("last_command_id", 0));
             o.put("orientation", prefs.getString("orientation", "portrait"));
+            if (foundLocation != null && System.currentTimeMillis() - foundLocationAt < LOCATION_SEND_MS) o.put("location", foundLocation);
             JSONObject w = wifiJson();
             w.remove("enabled");
             o.put("wifi", w);
@@ -1580,6 +1584,7 @@ public class MainActivity extends Activity {
         setBrightness(1f);
         try { locateTone = new android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100); } catch (Exception e) { locateTone = null; }
         handler.post(locateStep);
+        findLocation();
     }
 
     private void stopLocate() {
@@ -1588,6 +1593,90 @@ public class MainActivity extends Activity {
         if (locateView != null) { root.removeView(locateView); locateView = null; }
         setBrightness(-1f);
         focusWeb();
+    }
+
+    // ---------- locatie bij Zoek mij ----------
+
+    /*
+     * Alleen na de opdracht "Zoek mij": hoogstens 60 s een positie zoeken (GPS, en het netwerk als dat er is), plus het
+     * wifi-toegangspunt. Gaat als kiosk_status.location mee met de heartbeats van de 10 minuten erna; EventVOX bewaart
+     * alleen de laatste en wist hem na 24 uur. Er wordt nooit zomaar een locatie vastgelegd (het toestel wordt door een
+     * persoon gedragen). Het logboek krijgt geen coördinaten.
+     */
+    private static final long LOCATION_SEARCH_MS = 60000, LOCATION_SEND_MS = 600000;
+    private volatile JSONObject foundLocation;
+    private volatile long foundLocationAt = 0;
+    private android.location.Location bestLocation;
+    private android.location.LocationListener locationListener;
+
+    @SuppressWarnings({"deprecation", "MissingPermission"})
+    private void findLocation() {
+        if (locationListener != null) return; // al bezig
+        final android.location.LocationManager lm = (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
+        if (lm == null) return;
+        try {
+            if (isOwner()) dpm.setSecureSetting(admin, Settings.Secure.LOCATION_MODE, String.valueOf(Settings.Secure.LOCATION_MODE_HIGH_ACCURACY));
+        } catch (Exception ignored) {}
+        bestLocation = null;
+        // Een recente bekende positie als begin
+        for (String provider : new String[]{android.location.LocationManager.GPS_PROVIDER, android.location.LocationManager.NETWORK_PROVIDER}) {
+            try {
+                android.location.Location last = lm.getLastKnownLocation(provider);
+                if (last != null && System.currentTimeMillis() - last.getTime() < 120000) better(last);
+            } catch (Exception ignored) {}
+        }
+        locationListener = new android.location.LocationListener() {
+            public void onLocationChanged(android.location.Location l) {
+                better(l);
+                if (bestLocation != null && bestLocation.hasAccuracy() && bestLocation.getAccuracy() <= 20) finishLocation(lm);
+            }
+            public void onStatusChanged(String p, int s, Bundle b) {}
+            public void onProviderEnabled(String p) {}
+            public void onProviderDisabled(String p) {}
+        };
+        boolean any = false;
+        for (String provider : new String[]{android.location.LocationManager.GPS_PROVIDER, android.location.LocationManager.NETWORK_PROVIDER}) {
+            try {
+                if (lm.isProviderEnabled(provider)) { lm.requestLocationUpdates(provider, 1000, 0, locationListener, Looper.getMainLooper()); any = true; }
+            } catch (Exception ignored) {}
+        }
+        KioskLog.add(this, any ? "Zoek mij: locatie zoeken" : "Zoek mij: geen locatiebron (locatie uit op het toestel?)");
+        handler.postDelayed(new Runnable() { public void run() { finishLocation(lm); } }, any ? LOCATION_SEARCH_MS : 0);
+    }
+
+    private void better(android.location.Location l) {
+        if (l == null) return;
+        if (bestLocation == null || (l.hasAccuracy() && (!bestLocation.hasAccuracy() || l.getAccuracy() < bestLocation.getAccuracy()))) bestLocation = l;
+    }
+
+    @SuppressWarnings("deprecation")
+    private void finishLocation(android.location.LocationManager lm) {
+        if (locationListener == null) return;
+        try { lm.removeUpdates(locationListener); } catch (Exception ignored) {}
+        locationListener = null;
+        android.location.Location l = bestLocation;
+        if (l == null) { KioskLog.add(this, "Zoek mij: geen locatie gevonden"); return; }
+        try {
+            JSONObject o = new JSONObject();
+            o.put("lat", l.getLatitude());
+            o.put("lon", l.getLongitude());
+            if (l.hasAccuracy()) o.put("accuracy_m", Math.round(l.getAccuracy()));
+            o.put("provider", android.location.LocationManager.GPS_PROVIDER.equals(l.getProvider()) ? "gps" : "network");
+            o.put("at", iso(l.getTime()));
+            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+            android.net.wifi.WifiInfo info = wm == null ? null : wm.getConnectionInfo();
+            if (info != null && info.getNetworkId() != -1) {
+                JSONObject w = new JSONObject();
+                String ssid = info.getSSID();
+                if (ssid != null && !ssid.contains("unknown ssid")) w.put("ssid", ssid.replaceAll("^\"|\"$", ""));
+                if (info.getBSSID() != null && !"02:00:00:00:00:00".equals(info.getBSSID())) w.put("bssid", info.getBSSID());
+                w.put("rssi", info.getRssi());
+                o.put("wifi", w);
+            }
+            foundLocation = o;
+            foundLocationAt = System.currentTimeMillis();
+            KioskLog.add(this, "Zoek mij: locatie gevonden" + (l.hasAccuracy() ? " (±" + Math.round(l.getAccuracy()) + " m, " + o.optString("provider") + ")" : ""));
+        } catch (Exception ignored) {}
     }
 
     // ---------- beheer-QR-code ----------
