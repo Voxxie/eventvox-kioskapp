@@ -61,7 +61,7 @@
     function openAdmin() {
         $('#pin').hidden = true;
         state = call('state');
-        // De standaard-PIN staat openbaar op GitHub: eerst een eigen PIN kiezen
+        // Nog de standaard-PIN: eerst een eigen PIN kiezen
         if (state.pinDefault) { $('#mustpin').hidden = false; $('#mp1').focus(); return; }
         $('#mustpin').hidden = true;
         $('#admin').hidden = false;

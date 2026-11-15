@@ -1901,7 +1901,7 @@ public class MainActivity extends Activity {
         }
         if ("pin".equals(key)) {
             if (!v.matches("[0-9]{4,8}")) return "De PIN moet 4 tot 8 cijfers zijn";
-            if (v.equals("1234")) return "Kies een andere PIN dan 1234: die staat openbaar op GitHub";
+            if (v.equals("1234")) return "1234 is de standaard-PIN: kies een andere";
             e.putString("pin", v).commit();
             return null;
         }
