@@ -97,6 +97,7 @@ public class MainActivity extends Activity {
         wf.addAction(Intent.ACTION_USER_PRESENT);
         wf.addAction(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED);
         registerReceiver(wakeReceiver, wf);
+        registerReceiver(volumeReceiver, new IntentFilter("android.media.VOLUME_CHANGED_ACTION"));
         IntentFilter wifiF = new IntentFilter(android.net.wifi.WifiManager.RSSI_CHANGED_ACTION);
         wifiF.addAction(android.net.wifi.WifiManager.NETWORK_STATE_CHANGED_ACTION);
         wifiF.addAction(android.net.wifi.WifiManager.WIFI_STATE_CHANGED_ACTION);
@@ -1238,19 +1239,43 @@ public class MainActivity extends Activity {
 
     // ---------- volume vast ----------
 
-    /** volume_lock: percentage (standaard 80, 0 = uit) voor het geluid van de pagina; de volumeknoppen doen dan niets */
+    /*
+     * volume_lock: percentage (standaard 80, 0 = uit) voor het geluid van de pagina (STREAM_MUSIC: Web Audio, de piep
+     * van de scanterminal). De volumeknoppen vangt dispatchKeyEvent af; verandert het volume toch (een andere app, de
+     * instellingen), dan zet volumeReceiver het terug.
+     * Nooit UserManager.DISALLOW_ADJUST_VOLUME gebruiken: die zet het hoofdvolume op stil ("the master volume will be
+     * muted"). Versies tot 0.1.x deden dat; deze haalt de beperking weg en zet het dempen uit.
+     */
     @SuppressWarnings("deprecation")
     private void applyVolume() {
         int pct = prefs.getInt("volume_lock", 80);
         try {
+            if (isOwner()) {
+                dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_ADJUST_VOLUME);
+                dpm.setMasterVolumeMuted(admin, false);
+            }
             android.media.AudioManager am = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
-            if (isOwner()) dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_ADJUST_VOLUME);
             if (pct <= 0 || am == null) return;
             int max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC);
-            am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, Math.max(1, Math.round(max * Math.min(100, pct) / 100f)), 0);
-            if (isOwner()) dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_ADJUST_VOLUME);
+            int want = Math.max(1, Math.round(max * Math.min(100, pct) / 100f));
+            if (am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) != want) {
+                am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, want, 0);
+            }
+            if (Build.VERSION.SDK_INT >= 23 && am.isStreamMute(android.media.AudioManager.STREAM_MUSIC)) {
+                am.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.ADJUST_UNMUTE, 0);
+            }
         } catch (Exception ignored) {}
     }
+
+    /** Het volume is veranderd (niet via de knoppen, die vangt de app af): terug naar volume_lock */
+    private final BroadcastReceiver volumeReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+            if (!volumeLocked()) return;
+            handler.removeCallbacks(volumeRestore);
+            handler.postDelayed(volumeRestore, 300);
+        }
+    };
+    private final Runnable volumeRestore = new Runnable() { public void run() { applyVolume(); } };
 
     private boolean volumeLocked() { return prefs.getInt("volume_lock", 80) > 0; }
 
@@ -2456,6 +2481,7 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         try { unregisterReceiver(batteryReceiver); } catch (Exception ignored) {}
         try { unregisterReceiver(wakeReceiver); } catch (Exception ignored) {}
+        try { unregisterReceiver(volumeReceiver); } catch (Exception ignored) {}
         try { unregisterReceiver(wifiReceiver); } catch (Exception ignored) {}
         try { unregisterReceiver(scanReceiver); } catch (Exception ignored) {}
         try { unregisterReceiver(scanReceiver2); } catch (Exception ignored) {}
