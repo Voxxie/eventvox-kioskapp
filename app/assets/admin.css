@@ -132,3 +132,54 @@ details[open] summary { margin-bottom: 10px; }
 .btn.ghost { background: rgba(255,255,255,.14); color: #fff; }
 .log { white-space: pre-wrap; word-break: break-all; font-size: 11px; line-height: 1.45; background: #f6f3f8; border-radius: 10px; padding: 10px; max-height: 280px; overflow: auto; margin: 0; }
 .mustpin-form input::placeholder { letter-spacing: normal; }
+
+/* --- Overzicht en detailschermen --- */
+.back { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.15); color: #fff; font-size: 28px; line-height: 36px;
+  margin-right: 10px; flex: none; }
+.view > .card:first-child { margin-top: 0; }
+
+/* Statustegels: grijs als alles goed is, oranje of rood als er iets is */
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); grid-gap: 8px; margin-bottom: 12px; }
+.tile { background: var(--card); border-radius: 14px; padding: 10px 8px 9px; text-align: left; box-shadow: 0 1px 3px rgba(30,10,40,.06);
+  display: flex; flex-direction: column; min-width: 0; border: 1.5px solid transparent; }
+.t-ic { font-size: 16px; line-height: 1; }
+.t-name { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+.t-val { font-size: 13.5px; font-weight: 600; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile.warn { border-color: #f5b041; background: #fff8ec; }
+.tile.warn .t-val { color: #b26a00; }
+.tile.bad { border-color: #ef9a9a; background: #fdecec; }
+.tile.bad .t-val { color: var(--red); }
+
+/* Snelle acties */
+.quick { display: grid; grid-template-columns: repeat(3, 1fr); grid-gap: 8px; margin-bottom: 14px; }
+.qbtn { background: var(--purple); color: #fff; border-radius: 14px; padding: 12px 6px 10px; font-size: 12.5px; font-weight: 600; line-height: 1.25;
+  display: flex; flex-direction: column; align-items: center; text-align: center; }
+.qbtn span { font-size: 20px; line-height: 1; margin-bottom: 6px; }
+.qbtn:active { filter: brightness(1.15); }
+
+/* Menu als lijst, zoals de instellingen van een telefoon */
+.menu { background: var(--card); border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(30,10,40,.06); }
+.menu button { display: flex; align-items: center; width: 100%; padding: 13px 14px; text-align: left; border-top: 1px solid var(--line); }
+.menu button:first-child { border-top: 0; }
+.menu button:active { background: #f6f3f8; }
+.m-ic { width: 32px; height: 32px; border-radius: 9px; background: #f1ecf4; display: flex; align-items: center; justify-content: center;
+  font-size: 16px; margin-right: 12px; flex: none; }
+.m-text { flex: 1; min-width: 0; font-weight: 500; }
+.m-text small { display: block; color: var(--muted); font-size: 12.5px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-text small.bad { color: var(--red); }
+.menu i { font-style: normal; color: #b8b0c0; font-size: 22px; margin-left: 8px; }
+
+.leave-link { display: block; margin: 18px auto 4px; color: var(--red); font-weight: 500; font-size: 14px; padding: 8px 12px; }
+
+/* Detailschermen */
+.field { margin-top: 14px; }
+.field:first-child, .card > h2 + .field { margin-top: 0; }
+.field .lbl { margin-top: 0; }
+details.more { margin: 0 0 12px; border: 0; padding: 0; }
+details.more > summary { padding: 8px 4px 10px; color: var(--purple); font-weight: 600; }
+details.more[open] > summary { margin-bottom: 0; }
+
+/* Ingesteld vanuit EventVOX: een labeltje bij de instelling */
+.remote > span:first-child::after, .remote > .lbl::after { content: "via EventVOX"; display: inline-block; margin-left: 6px; padding: 1px 7px;
+  border-radius: 10px; background: #e8eefc; color: #3554a5; font-size: 10.5px; font-weight: 600; vertical-align: 1px; }
+.remote > span:first-child small { display: block; }

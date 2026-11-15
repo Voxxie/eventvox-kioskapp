@@ -66,6 +66,7 @@
         $('#mustpin').hidden = true;
         $('#admin').hidden = false;
         render();
+        go('home');
     }
 
     $('#mustpin [data-action="close"]').addEventListener('click', function () { K.action('close', ''); });
@@ -91,61 +92,130 @@
         return v + ' ' + el.getAttribute('data-unit');
     }
 
+    // --- Navigatie: overzicht en detailschermen ---------------------------------------------------
+    var view = 'home';
+    function go(name) {
+        if (view === 'test' && name !== 'test') K.action('nfcTest', 'stop');
+        view = name;
+        $$('.view').forEach(function (v) { v.hidden = v.getAttribute('data-view') !== name; });
+        var el = $('.view[data-view="' + name + '"]');
+        var home = name === 'home';
+        $('#back').hidden = home;
+        $('#top-logo').hidden = !home;
+        $('#top-title').textContent = home ? 'EventVOX-Webkiosk' : el.getAttribute('data-title');
+        $('#top-sub').hidden = !home;
+        window.scrollTo(0, 0);
+        if (name === 'test') {
+            $('#test-box').classList.remove('got');
+            $('#test-wait').hidden = false;
+            $('#test-result').hidden = true;
+            K.action('nfcTest', 'start');
+        }
+    }
+    $('#back').addEventListener('click', function () { go('home'); });
+
+    var LEVEL = ['heel zwak', 'zwak', 'redelijk', 'goed', 'uitstekend'];
+    var PASS = { off: 'uit', keyboard: 'typen', event: 'event', both: 'typen + event' };
+    var ORIENT = { portrait: 'staand', landscape: 'liggend', auto: 'draait mee' };
+
+    function tile(id, value, level) {
+        var t = $('#' + id);
+        $('.t-val', t).textContent = value;
+        t.classList.toggle('warn', level === 'warn');
+        t.classList.toggle('bad', level === 'bad');
+    }
+
     function render() {
-        var s = state;
-        $('#top-sub').textContent = 'versie ' + s.version + ' · SN ' + s.serial + (s.owner ? '' : ' · geen device owner');
+        var s = state, st = s.settings || {};
+        var h = s.health || {}, b = s.battery || {}, w = s.wifiNow || {}, sc = s.scanner || {}, n = s.nfc || {}, u = s.update || {};
+        $('#top-sub').textContent = 'versie ' + s.version + ' · SN ' + s.serial;
+
+        // Statustegels
+        tile('t-network', w.connected ? (w.level != null ? LEVEL[w.level] : 'verbonden') : 'geen verbinding',
+            !w.connected ? 'bad' : w.level <= 1 ? 'warn' : '');
+        tile('t-battery', b.level == null ? '—' : b.level + '%' + (b.charging ? ' ⚡' : ''),
+            b.level == null || b.charging ? '' : st.low_battery && b.level <= st.low_battery ? 'bad' : b.level <= 30 ? 'warn' : '');
+        tile('t-nfc', !n.available ? 'niet aanwezig' : !n.enabled ? 'uit in Android' : st.nfc_mode === 'off' ? 'uit' : PASS[st.nfc_mode],
+            n.available && !n.enabled ? 'warn' : '');
+        tile('t-scanner', !sc.installed ? 'geen DataWedge' : st.datawedge === 'app' ? 'via de app' : 'eigen profielen', '');
+        var newer = /^nieuw/.test(u.lastResult || ''), failed = /^fout/.test(u.lastResult || '');
+        tile('t-updates', newer ? 'nieuwe versie' : failed ? 'niet gelukt' : s.version, newer || failed ? 'warn' : '');
+        tile('t-kiosk', s.owner ? 'vergrendeld' : 'niet vergrendeld', s.owner ? '' : 'bad');
+
+        // Samenvattingen in het menu
+        $('#m-website').textContent = (s.resolvedUrl || '').replace(/^https?:\/\//, '');
+        $('#m-scan').textContent = 'Scanner ' + (st.datawedge === 'app' ? 'via de app' : 'eigen profielen') + ' · NFC ' + (PASS[st.nfc_mode] || '');
+        $('#m-screen').textContent = [ORIENT[st.orientation], st.keep_screen_on ? 'scherm altijd aan' : '', st.volume_lock ? 'volume ' + st.volume_lock + '%' : '']
+            .filter(Boolean).join(' · ');
+        $('#m-network').textContent = w.connected ? (w.ssid || 'verbonden') + ' · ' + LEVEL[w.level] : 'geen verbinding';
+        $('#m-updates').textContent = 'versie ' + s.version + (u.lastResult ? ' · ' + u.lastResult : '') + (st.update_channel === 'beta' ? ' · testkanaal' : '');
+        var clockOff = h.clock && !/gelijk/.test(h.clock);
+        var dev = $('#m-device');
+        dev.textContent = clockOff ? 'Klok ' + h.clock : 'SN ' + s.serial + (b.level != null ? ' · ' + b.level + '%' : '') + (h.crashes ? ' · ' + h.crashes + '× hersteld' : '');
+        dev.classList.toggle('bad', !!clockOff);
+        $('#m-security').textContent = 'Openen met ' + st.menu_taps + '× tikken' + (h.adminQr ? ' of een beheer-QR-code' : '');
+
+        // Velden
         if (document.activeElement !== $('#url')) $('#url').value = s.url;
         $('#url-preview').textContent = '→ ' + s.resolvedUrl;
-        if (document.activeElement !== $('#update_url')) $('#update_url').value = s.update.url;
-        $('#update_url').placeholder = s.update.defaultUrl;
-
-        // Instellingen met data-setting
+        if (document.activeElement !== $('#update_url')) $('#update_url').value = u.url;
+        $('#update_url').placeholder = u.defaultUrl;
         $$('.seg[data-setting]').forEach(function (seg) {
-            var v = s.settings[seg.getAttribute('data-setting')];
-            $$('button', seg).forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-v') === v); });
+            var v = st[seg.getAttribute('data-setting')];
+            $$('button', seg).forEach(function (btn) { btn.classList.toggle('on', btn.getAttribute('data-v') === v); });
         });
-        $$('select[data-setting]').forEach(function (sel) { sel.value = s.settings[sel.getAttribute('data-setting')]; });
-        $$('input[type=checkbox][data-setting]').forEach(function (cb) { cb.checked = !!s.settings[cb.getAttribute('data-setting')]; });
-        $$('.stepper[data-setting]').forEach(function (st) {
-            if (!st.firstChild) st.innerHTML = '<button data-d="-1" aria-label="Minder">−</button><b></b><button data-d="1" aria-label="Meer">+</button>';
-            $('b', st).textContent = stepText(st, s.settings[st.getAttribute('data-setting')]);
+        $$('select[data-setting]').forEach(function (sel) { sel.value = st[sel.getAttribute('data-setting')]; });
+        $$('input[type=checkbox][data-setting]').forEach(function (cb) { cb.checked = !!st[cb.getAttribute('data-setting')]; });
+        $$('.stepper[data-setting]').forEach(function (el) {
+            if (!el.firstChild) el.innerHTML = '<button data-d="-1" aria-label="Minder">−</button><b></b><button data-d="1" aria-label="Meer">+</button>';
+            $('b', el).textContent = stepText(el, st[el.getAttribute('data-setting')]);
+        });
+        // Dimmen kan alleen met scherm altijd aan
+        $('#dim-row').hidden = !st.keep_screen_on;
+        // Ingesteld vanuit EventVOX: een labeltje
+        var remote = s.remoteKeys || [];
+        $$('[data-setting]').forEach(function (el) {
+            var row = el.closest('.field, .toggle-row');
+            if (row) row.classList.toggle('remote', remote.indexOf(el.getAttribute('data-setting')) >= 0);
         });
 
-        // NFC
+        // Scannen
+        var spill = $('#scan-pill');
+        spill.textContent = !sc.installed ? 'geen DataWedge' : st.datawedge === 'app' ? 'via de app' : 'eigen profielen';
+        spill.classList.toggle('off', !sc.installed);
+        $('#scan-status').textContent = sc.status || '';
         var pill = $('#nfc-pill');
-        pill.textContent = !s.nfc.available ? 'niet aanwezig' : s.nfc.enabled ? 'aan' : 'uit in Android';
-        pill.classList.toggle('off', !s.nfc.available || !s.nfc.enabled);
-        $('#nfc-status').textContent = s.nfc.status;
+        pill.textContent = !n.available ? 'niet aanwezig' : n.enabled ? 'aan' : 'uit in Android';
+        pill.classList.toggle('off', !n.available || !n.enabled);
+        $('#nfc-status').textContent = n.status || '';
+
+        // Netwerk
+        $('#net-now').innerHTML = (w.connected ? [
+            ['Verbonden met', esc(w.ssid || '(naam onbekend)')],
+            ['Signaal', esc(LEVEL[w.level] + (w.rssi != null ? ' · ' + w.rssi + ' dBm' : ''))],
+            ['Snelheid', w.link_speed ? esc(w.link_speed + ' Mbps · ' + (w.frequency >= 5000 ? '5' : '2,4') + ' GHz') : '—'],
+        ] : [['Wifi', '<span style="color:var(--red)">geen verbinding</span>']])
+            .map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('');
+        $('#wifi-status').textContent = s.wifi || '';
 
         // Updates
         $('#upd-version').textContent = 'Versie ' + s.version;
-        $('#upd-last').textContent = s.update.lastCheck ? 'Laatst gecontroleerd ' + s.update.lastCheck + (s.update.lastResult ? ' · ' + s.update.lastResult : '') : 'Nog niet gecontroleerd';
+        $('#upd-last').textContent = u.lastCheck ? 'Gecontroleerd ' + u.lastCheck + (u.lastResult ? ' · ' + u.lastResult : '') : 'Nog niet gecontroleerd';
 
-        $('#wifi-status').textContent = s.wifi;
-
-        // Scanner (DataWedge)
-        var sc = s.scanner || {};
-        var spill = $('#scan-pill');
-        spill.textContent = !sc.installed ? 'geen DataWedge' : s.settings.datawedge === 'app' ? 'via de app' : 'eigen profielen';
-        spill.classList.toggle('off', !sc.installed);
-        $('#scan-status').textContent = sc.status || '';
-
-        var h = s.health || {};
-        $('#diag-status').textContent = h.diagnosticsPending ? 'Diagnose gaat mee met de volgende heartbeat…'
-            : h.diagnosticsSent ? 'Laatste diagnose verstuurd ' + h.diagnosticsSent : '';
+        // Apparaat
+        $('#diag-status').textContent = h.diagnosticsPending ? 'Gaat mee met de volgende heartbeat…'
+            : h.diagnosticsSent ? 'Laatst verstuurd ' + h.diagnosticsSent : '';
         $('#log').textContent = h.log || '(leeg)';
-        var b = s.battery || {};
         $('#device').innerHTML = [
             ['Serienummer', '<span class="mono">' + esc(s.serial) + '</span>'],
             ['Model', esc(s.model)],
             ['Android', esc(s.android)],
-            ['Batterij', b.level == null ? '—' : b.level + '%' + (b.charging ? ' · laadt op' : '') + (b.temperature ? ' · ' + b.temperature + ' °C' : '')],
-            ['Kiosk-modus', s.owner ? 'aan (device owner)' : '<span style="color:var(--red)">uit: geen device owner</span>'],
-            ['Terminal', h.identity ? 'identiteit bewaard (komt terug na een crash)' : 'nog niet gekoppeld of geen scanterminal'],
-            ['Crashes', h.crashes ? h.crashes + ' sinds de start, laatste ' + h.lastCrash + ' (hersteld)' : 'geen sinds de start'],
-            ['Klok', h.clock ? (/gelijk/.test(h.clock) ? h.clock : '<span style="color:var(--red)">' + esc(h.clock) + '</span>') : 'nog niet gecontroleerd'],
-            ['Uit EventVOX', h.remote ? 'ingesteld: ' + esc(h.remote) : 'geen instellingen (die van dit toestel)'],
-            ['Beheer-QR', h.adminQr ? 'kan met een beheer-QR-code worden geopend' : 'nog geen sleutel (nog niet gekoppeld)'],
+            ['Accu', b.level == null ? '—' : b.level + '%' + (b.charging ? ' · laadt op' : '') + (b.temperature ? ' · ' + b.temperature + ' °C' : '')],
+            ['Klok', h.clock ? (clockOff ? '<span style="color:var(--red)">' + esc(h.clock) + '</span>' : esc(h.clock)) : 'nog niet gecontroleerd'],
+            ['Kiosk-modus', s.owner ? 'vergrendeld (device owner)' : '<span style="color:var(--red)">niet vergrendeld</span>'],
+            ['Terminal', h.identity ? 'identiteit bewaard' : 'nog niet gekoppeld'],
+            ['Crashes', h.crashes ? h.crashes + '× hersteld, laatste ' + esc(h.lastCrash) : 'geen'],
+            ['Uit EventVOX', h.remote ? esc(h.remote) : 'geen instellingen'],
         ].map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('');
     }
 
@@ -174,9 +244,10 @@
             var k = b.getAttribute('data-save');
             if (k === 'url') { if (set('url', $('#url').value)) $('#url').blur(); }
             if (k === 'update_url') set('update_url', $('#update_url').value);
-            if (k === 'pin') { if (set('pin', $('#newpin').value)) { $('#newpin').value = ''; $('#newpin').closest('details').open = false; } }
+            if (k === 'pin') { if (set('pin', $('#newpin').value)) { $('#newpin').value = ''; $('#newpin').blur(); } }
             return;
         }
+        if (b.hasAttribute('data-go')) { go(b.getAttribute('data-go')); return; }
         if (b.hasAttribute('data-confirm')) { confirmAction(b.getAttribute('data-confirm')); return; }
         if (b.hasAttribute('data-action')) {
             var a = b.getAttribute('data-action');
@@ -191,18 +262,6 @@
         cb.addEventListener('change', function () { set(cb.getAttribute('data-setting'), cb.checked); });
     });
     $('#url').addEventListener('keydown', function (e) { if (e.key === 'Enter') { set('url', this.value); this.blur(); } });
-
-    // NFC testen
-    var testing = false;
-    $('#nfc-test-btn').addEventListener('click', function () {
-        testing = !testing;
-        $('#nfc-test').hidden = !testing;
-        $('#nfc-test').classList.remove('got');
-        $('#nfc-wait').hidden = false;
-        $('#nfc-result').hidden = true;
-        this.textContent = testing ? 'Test stoppen' : 'NFC testen';
-        K.action('nfcTest', testing ? 'start' : 'stop');
-    });
 
     // Bevestigen
     var CONFIRM = {
@@ -228,21 +287,20 @@
         if (type === 'refresh') refresh();
         if (type === 'back') {
             if (!$('#sheet').hidden) $('#sheet').hidden = true;
+            else if (view !== 'home' && !$('#admin').hidden) go('home');
             else K.action('close', '');
         }
-        if (type === 'nfc') {
-            $('#nfc-test').classList.add('got');
-            $('#nfc-wait').hidden = true;
-            var rows = [['Tag-ID', d.uid], ['Hex', d.uidHex], ['Type', (d.techs || []).join(', ')]];
-            (d.ndef || []).forEach(function (r) { rows.push(['Inhoud (' + r.type + ')', r.value]); });
-            rows.push(['Wordt getypt als', d.typed]);
-            var dl = $('#nfc-result');
+        if (type === 'nfc' || type === 'scan') {
+            var rows = type === 'scan'
+                ? [['Barcode', d.data]].concat(d.symbology ? [['Type', d.symbology]] : [])
+                : [['NFC-tag', d.uid], ['Type', (d.techs || []).join(', ')]]
+                    .concat((d.ndef || []).map(function (r) { return ['Inhoud', r.value]; })).concat([['Wordt getypt als', d.typed]]);
+            if (view !== 'test') { toast((type === 'scan' ? 'Gescand: ' : 'NFC-tag: ') + rows[0][1]); return; }
+            $('#test-box').classList.add('got');
+            $('#test-wait').hidden = true;
+            var dl = $('#test-result');
             dl.innerHTML = rows.map(function (r) { return '<dt>' + esc(r[0]) + '</dt><dd class="mono">' + esc(r[1]) + '</dd>'; }).join('');
             dl.hidden = false;
-        }
-        if (type === 'scan') {
-            $('#scan-test').hidden = false;
-            $('#scan-result').innerHTML = '<dt>Gescand</dt><dd class="mono">' + esc(d.data) + '</dd>' + (d.symbology ? '<dt>Type</dt><dd>' + esc(d.symbology) + '</dd>' : '');
         }
         if (type === 'update') {
             var btn = $('#upd-check');

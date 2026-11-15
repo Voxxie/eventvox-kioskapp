@@ -40,159 +40,225 @@
   </div>
 </section>
 
-<!-- Beheer -->
+<!-- Beheer: een overzicht, de details op eigen schermen -->
 <section id="admin" class="admin" hidden>
   <header class="top">
-    <img src="logo.png" alt="" class="top-logo">
+    <button class="back" id="back" aria-label="Terug" hidden>‹</button>
+    <img src="logo.png" alt="" class="top-logo" id="top-logo">
     <div class="top-text">
-      <div class="top-title">EventVOX-Webkiosk</div>
+      <div class="top-title" id="top-title">EventVOX-Webkiosk</div>
       <div class="top-sub" id="top-sub"></div>
     </div>
     <button class="close" data-action="close" aria-label="Sluiten">✕</button>
   </header>
 
   <main>
-    <div class="card">
-      <h2><span class="ic">🌐</span>Website</h2>
-      <label class="lbl" for="url">Adres</label>
-      <input id="url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false">
-      <p class="hint">Wordt ingevuld: <code>{serial}</code> serienummer · <code>{version}</code> app-versie · <code>{model}</code></p>
-      <p class="preview" id="url-preview"></p>
-      <div class="row">
-        <button class="btn primary" data-save="url">Opslaan</button>
-        <button class="btn" data-action="reload">Herladen</button>
-        <button class="btn" data-action="clearCache">Cache wissen</button>
+    <!-- Overzicht -->
+    <div class="view" data-view="home">
+      <div class="tiles">
+        <button class="tile" data-go="network" id="t-network"><span class="t-ic">📶</span><span class="t-name">Netwerk</span><b class="t-val"></b></button>
+        <button class="tile" data-go="device" id="t-battery"><span class="t-ic">🔋</span><span class="t-name">Accu</span><b class="t-val"></b></button>
+        <button class="tile" data-go="scan" id="t-nfc"><span class="t-ic">💳</span><span class="t-name">NFC</span><b class="t-val"></b></button>
+        <button class="tile" data-go="scan" id="t-scanner"><span class="t-ic">🔦</span><span class="t-name">Scanner</span><b class="t-val"></b></button>
+        <button class="tile" data-go="updates" id="t-updates"><span class="t-ic">⬇️</span><span class="t-name">Updates</span><b class="t-val"></b></button>
+        <button class="tile" data-go="device" id="t-kiosk"><span class="t-ic">🔒</span><span class="t-name">Kiosk</span><b class="t-val"></b></button>
+      </div>
+
+      <div class="quick">
+        <button class="qbtn" data-action="reload"><span>↻</span>Pagina herladen</button>
+        <button class="qbtn" data-action="networks"><span>＋</span>Netwerk toevoegen</button>
+        <button class="qbtn" data-go="test"><span>▦</span>Scan testen</button>
+      </div>
+
+      <nav class="menu">
+        <button data-go="website"><span class="m-ic">🌐</span><span class="m-text">Website<small id="m-website"></small></span><i>›</i></button>
+        <button data-go="scan"><span class="m-ic">🔦</span><span class="m-text">Scannen<small id="m-scan"></small></span><i>›</i></button>
+        <button data-go="screen"><span class="m-ic">🖥️</span><span class="m-text">Scherm en geluid<small id="m-screen"></small></span><i>›</i></button>
+        <button data-go="network"><span class="m-ic">📡</span><span class="m-text">Netwerk<small id="m-network"></small></span><i>›</i></button>
+        <button data-go="updates"><span class="m-ic">⬇️</span><span class="m-text">Updates<small id="m-updates"></small></span><i>›</i></button>
+        <button data-go="device"><span class="m-ic">📱</span><span class="m-text">Apparaat<small id="m-device"></small></span><i>›</i></button>
+        <button data-go="security"><span class="m-ic">🔑</span><span class="m-text">Beveiliging<small id="m-security"></small></span><i>›</i></button>
+      </nav>
+
+      <button class="leave-link" data-go="leave">Kiosk verlaten…</button>
+      <p class="foot">Sluit vanzelf na 3 minuten zonder aanraking.</p>
+    </div>
+
+    <!-- Scan testen: scanner en NFC tegelijk -->
+    <div class="view" data-view="test" data-title="Scan testen" hidden>
+      <div class="card">
+        <div class="test" id="test-box">
+          <div class="test-wait" id="test-wait"><span class="pulse"></span>Scan een barcode of houd een NFC-tag tegen de achterkant</div>
+          <dl class="kv" id="test-result" hidden></dl>
+        </div>
+        <p class="hint">Zolang dit scherm open is, gaat een scan niet naar de website.</p>
+      </div>
+      <div class="card">
+        <h2>Trillen</h2>
+        <div class="row">
+          <button class="btn" data-action="vibrateTest" data-arg="ok">Toegelaten</button>
+          <button class="btn" data-action="vibrateTest" data-arg="warning">Waarschuwing</button>
+          <button class="btn" data-action="vibrateTest" data-arg="error">Geweigerd</button>
+        </div>
       </div>
     </div>
 
-    <div class="card">
-      <h2><span class="ic">📶</span>NFC <span class="pill" id="nfc-pill"></span></h2>
-      <label class="lbl">Doorgeven aan de website</label>
-      <div class="seg" data-setting="nfc_mode">
-        <button data-v="off">Uit</button><button data-v="keyboard">Typen</button><button data-v="event">Event</button><button data-v="both">Beide</button>
-      </div>
-      <label class="lbl" for="nfc_uid_format">Formaat tag-ID</label>
-      <select id="nfc_uid_format" data-setting="nfc_uid_format">
-        <option value="hex">Hex — 04A1B2C3</option>
-        <option value="hex_reversed">Hex omgekeerd — C3B2A104</option>
-        <option value="hex_colon">Hex met dubbele punten — 04:A1:B2:C3</option>
-        <option value="dec">Decimaal</option>
-        <option value="dec_reversed">Decimaal omgekeerd</option>
-      </select>
-      <label class="lbl" for="nfc_keyboard_value">Wat typen</label>
-      <select id="nfc_keyboard_value" data-setting="nfc_keyboard_value">
-        <option value="uid">Tag-ID</option>
-        <option value="ndef">Tekst of URL op de tag (anders tag-ID)</option>
-      </select>
-      <div class="toggle-row"><span>Enter na typen</span><label class="sw"><input type="checkbox" data-setting="nfc_send_enter"><i></i></label></div>
-      <div class="toggle-row"><span>Periodiek verversen<small>extra vangnet na slaapstand</small></span>
-        <div class="stepper" data-setting="nfc_refresh_seconds" data-step="30" data-min="0" data-max="600" data-unit="s" data-zero="uit"></div></div>
-
-      <div class="test" id="nfc-test" hidden>
-        <div class="test-wait" id="nfc-wait"><span class="pulse"></span>Houd een tag tegen de achterkant…</div>
-        <dl class="kv" id="nfc-result" hidden></dl>
-      </div>
-      <div class="row">
-        <button class="btn primary" id="nfc-test-btn">NFC testen</button>
-        <button class="btn" data-action="nfcRestart">Herstarten</button>
-        <button class="btn" data-action="nfcSettings">Android-NFC</button>
-      </div>
-      <p class="hint" id="nfc-status"></p>
-    </div>
-
-    <div class="card">
-      <h2><span class="ic">🔦</span>Scanner <span class="pill" id="scan-pill"></span></h2>
-      <label class="lbl">DataWedge</label>
-      <div class="seg" data-setting="datawedge">
-        <button data-v="app">Via de app</button><button data-v="off">Eigen profielen</button>
-      </div>
-      <label class="lbl">Doorgeven aan de website</label>
-      <div class="seg" data-setting="scan_mode">
-        <button data-v="off">Uit</button><button data-v="keyboard">Typen</button><button data-v="event">Event</button><button data-v="both">Beide</button>
-      </div>
-      <div class="test got" id="scan-test" hidden><dl class="kv" id="scan-result"></dl></div>
-      <p class="hint" id="scan-status"></p>
-      <p class="hint">Scan hier iets om te testen: zolang dit scherm open is gaat het niet naar de website.</p>
-      <div class="row"><button class="btn" data-action="dataWedge">Profiel opnieuw instellen</button></div>
-      <div class="toggle-row"><span>Trillen bij een scanuitslag<small>zoals de scanterminal het vraagt: 1× kort toegelaten, 2× waarschuwing, 3× lang geweigerd</small></span><label class="sw"><input type="checkbox" data-setting="vibrate"><i></i></label></div>
-      <div class="row">
-        <button class="btn" data-action="vibrateTest" data-arg="ok">Test toegelaten</button>
-        <button class="btn" data-action="vibrateTest" data-arg="warning">Waarschuwing</button>
-        <button class="btn" data-action="vibrateTest" data-arg="error">Geweigerd</button>
+    <!-- Website -->
+    <div class="view" data-view="website" data-title="Website" hidden>
+      <div class="card">
+        <label class="lbl" for="url">Adres</label>
+        <input id="url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <p class="preview" id="url-preview"></p>
+        <div class="row">
+          <button class="btn primary" data-save="url">Opslaan</button>
+          <button class="btn" data-action="reload">Herladen</button>
+          <button class="btn" data-action="clearCache">Cache wissen</button>
+        </div>
+        <p class="hint"><code>{serial}</code> = serienummer · <code>{version}</code> = app-versie · <code>{model}</code></p>
       </div>
     </div>
 
-    <div class="card">
-      <h2><span class="ic">⬇️</span>Updates</h2>
-      <div class="big-row"><div><div class="big" id="upd-version"></div><div class="hint" id="upd-last"></div></div>
-        <button class="btn primary" data-action="checkUpdate" id="upd-check">Controleren</button></div>
-      <div class="result" id="upd-result" hidden></div>
-      <label class="lbl" style="margin-top:14px">Kanaal</label>
-      <div class="seg" data-setting="update_channel">
-        <button data-v="stable">Stabiel</button><button data-v="beta">Test (pre-releases)</button>
+    <!-- Scannen: scanner en NFC -->
+    <div class="view" data-view="scan" data-title="Scannen" hidden>
+      <div class="card">
+        <h2>Scanner <span class="pill" id="scan-pill"></span></h2>
+        <div class="field"><label class="lbl">DataWedge</label>
+          <div class="seg" data-setting="datawedge"><button data-v="app">Via de app</button><button data-v="off">Eigen profielen</button></div></div>
+        <div class="field"><label class="lbl">Scans naar de website</label>
+          <div class="seg" data-setting="scan_mode"><button data-v="off">Uit</button><button data-v="keyboard">Typen</button><button data-v="event">Event</button><button data-v="both">Beide</button></div></div>
+        <div class="toggle-row"><span>Trillen bij een scanuitslag</span><label class="sw"><input type="checkbox" data-setting="vibrate"><i></i></label></div>
+        <p class="hint" id="scan-status"></p>
       </div>
-      <p class="hint">Test: ook releases die op GitHub als <i>pre-release</i> zijn gemarkeerd. Zet één of twee toestellen op Test om een nieuwe versie eerst te proberen.</p>
-      <div class="toggle-row"><span>Automatisch installeren<small>bij het starten, na 2 min zonder aanraking</small></span><label class="sw"><input type="checkbox" data-setting="auto_update"><i></i></label></div>
-      <div class="toggle-row"><span>Ook periodiek controleren</span>
-        <div class="stepper" data-setting="update_check_hours" data-step="1" data-min="0" data-max="168" data-unit="uur" data-zero="nee"></div></div>
-      <details><summary>Update-adres</summary>
-        <input id="update_url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="">
-        <div class="row"><button class="btn" data-save="update_url">Opslaan</button></div>
+      <div class="card">
+        <h2>NFC <span class="pill" id="nfc-pill"></span></h2>
+        <div class="field"><label class="lbl">Tags naar de website</label>
+          <div class="seg" data-setting="nfc_mode"><button data-v="off">Uit</button><button data-v="keyboard">Typen</button><button data-v="event">Event</button><button data-v="both">Beide</button></div></div>
+        <div class="field"><label class="lbl" for="nfc_keyboard_value">Wat typen</label>
+          <select id="nfc_keyboard_value" data-setting="nfc_keyboard_value"><option value="uid">Tag-ID</option><option value="ndef">Tekst of URL op de tag</option></select></div>
+        <div class="toggle-row"><span>Enter na typen</span><label class="sw"><input type="checkbox" data-setting="nfc_send_enter"><i></i></label></div>
+      </div>
+      <details class="more"><summary>Meer opties</summary>
+        <div class="card">
+          <div class="field"><label class="lbl" for="nfc_uid_format">Formaat tag-ID</label>
+            <select id="nfc_uid_format" data-setting="nfc_uid_format">
+              <option value="hex">Hex — 04A1B2C3</option><option value="hex_reversed">Hex omgekeerd — C3B2A104</option>
+              <option value="hex_colon">Hex met dubbele punten — 04:A1:B2:C3</option><option value="dec">Decimaal</option><option value="dec_reversed">Decimaal omgekeerd</option>
+            </select></div>
+          <div class="toggle-row"><span>NFC periodiek verversen<small>vangnet na slaapstand</small></span>
+            <div class="stepper" data-setting="nfc_refresh_seconds" data-step="30" data-min="0" data-max="600" data-unit="s" data-zero="uit"></div></div>
+          <div class="row">
+            <button class="btn" data-action="nfcRestart">NFC herstarten</button>
+            <button class="btn" data-action="nfcSettings">NFC in Android</button>
+            <button class="btn" data-action="dataWedge">Scannerprofiel opnieuw</button>
+          </div>
+          <p class="hint" id="nfc-status"></p>
+        </div>
       </details>
     </div>
 
-    <div class="card">
-      <h2><span class="ic">🖥️</span>Scherm en beveiliging</h2>
-      <div class="toggle-row"><span>Scherm altijd aan</span><label class="sw"><input type="checkbox" data-setting="keep_screen_on"><i></i></label></div>
-      <div class="toggle-row"><span>Dimmen als het rustig is<small>alleen met scherm altijd aan; een tik, scan of NFC maakt het weer fel</small></span>
-        <div class="stepper" data-setting="dim_minutes" data-step="1" data-min="0" data-max="30" data-unit="min" data-zero="uit"></div></div>
-      <div class="toggle-row"><span>Helderheid gedimd</span>
-        <div class="stepper" data-setting="dim_level" data-step="5" data-min="5" data-max="60" data-unit="%"></div></div>
-      <label class="lbl" style="margin-top:14px">Schermstand</label>
-      <div class="seg" data-setting="orientation">
-        <button data-v="portrait">Staand</button><button data-v="landscape">Liggend</button><button data-v="auto">Draait mee</button>
+    <!-- Scherm en geluid -->
+    <div class="view" data-view="screen" data-title="Scherm en geluid" hidden>
+      <div class="card">
+        <div class="field"><label class="lbl">Schermstand</label>
+          <div class="seg" data-setting="orientation"><button data-v="portrait">Staand</button><button data-v="landscape">Liggend</button><button data-v="auto">Draait mee</button></div></div>
+        <div class="toggle-row"><span>Scherm altijd aan</span><label class="sw"><input type="checkbox" data-setting="keep_screen_on"><i></i></label></div>
+        <div class="toggle-row" id="dim-row"><span>Dimmen als het rustig is</span>
+          <div class="stepper" data-setting="dim_minutes" data-step="1" data-min="0" data-max="30" data-unit="min" data-zero="uit"></div></div>
+        <div class="toggle-row"><span>Volume vast<small>uit: de volumeknoppen werken</small></span>
+          <div class="stepper" data-setting="volume_lock" data-step="10" data-min="0" data-max="100" data-unit="%" data-zero="uit"></div></div>
+        <div class="toggle-row"><span>Waarschuwing lege accu</span>
+          <div class="stepper" data-setting="low_battery" data-step="5" data-min="0" data-max="50" data-unit="%" data-zero="uit"></div></div>
       </div>
-      <div class="toggle-row"><span>Waarschuwing lege accu<small>een rode balk onder dit percentage, als hij niet aan de lader ligt</small></span>
-        <div class="stepper" data-setting="low_battery" data-step="5" data-min="0" data-max="50" data-unit="%" data-zero="uit"></div></div>
-      <div class="toggle-row"><span>Volume vast<small>de volumeknoppen doen dan niets</small></span>
-        <div class="stepper" data-setting="volume_lock" data-step="10" data-min="0" data-max="100" data-unit="%" data-zero="uit"></div></div>
-      <div class="toggle-row"><span>'s Nachts herladen<small>verse pagina, alleen als het toestel 5 min niet gebruikt is</small></span><label class="sw"><input type="checkbox" data-setting="nightly_reload"><i></i></label></div>
-      <div class="toggle-row"><span>Om</span>
-        <div class="stepper" data-setting="nightly_hour" data-step="1" data-min="0" data-max="23" data-format="hour"></div></div>
-      <div class="toggle-row"><span>Automatisch herladen</span>
-        <div class="stepper" data-setting="reload_minutes" data-step="5" data-min="0" data-max="1440" data-unit="min" data-zero="uit"></div></div>
-      <div class="toggle-row"><span>SSL-fouten negeren<small>alleen voor interne servers</small></span><label class="sw"><input type="checkbox" data-setting="ignore_ssl_errors"><i></i></label></div>
-      <div class="toggle-row"><span>Tikken voor dit menu</span>
-        <div class="stepper" data-setting="menu_taps" data-step="1" data-min="5" data-max="20" data-unit="×"></div></div>
-      <details><summary>Beheer-PIN wijzigen</summary>
-        <input id="newpin" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="Nieuwe PIN (minimaal 4 cijfers)">
-        <div class="row"><button class="btn" data-save="pin">PIN opslaan</button></div>
+      <details class="more"><summary>Meer opties</summary>
+        <div class="card">
+          <div class="toggle-row"><span>Helderheid gedimd</span>
+            <div class="stepper" data-setting="dim_level" data-step="5" data-min="5" data-max="60" data-unit="%"></div></div>
+          <div class="toggle-row"><span>'s Nachts herladen<small>alleen na 5 min zonder gebruik</small></span><label class="sw"><input type="checkbox" data-setting="nightly_reload"><i></i></label></div>
+          <div class="toggle-row"><span>Herladen om</span>
+            <div class="stepper" data-setting="nightly_hour" data-step="1" data-min="0" data-max="23" data-format="hour"></div></div>
+          <div class="toggle-row"><span>Ook overdag herladen</span>
+            <div class="stepper" data-setting="reload_minutes" data-step="5" data-min="0" data-max="1440" data-unit="min" data-zero="nee"></div></div>
+        </div>
       </details>
     </div>
 
-    <div class="card">
-      <h2><span class="ic">📡</span>Wifi</h2>
-      <p class="hint" id="wifi-status"></p>
-      <p class="hint">Een netwerk toevoegen: met <b>Netwerk toevoegen</b> (QR-code of een netwerk in de buurt), of scan een wifi-QR-code terwijl dit scherm open is. Maak een code via Terminals → Wifi-QR-code in EventVOX, of laat een telefoon zijn wifi delen.</p>
-      <div class="row"><button class="btn primary" data-action="networks">Netwerk toevoegen</button><button class="btn" data-action="wifiSettings">Wifi-instellingen</button></div>
-    </div>
-
-    <div class="card">
-      <h2><span class="ic">📱</span>Apparaat</h2>
-      <dl class="kv" id="device"></dl>
-      <div class="row"><button class="btn" data-action="diagnostics">Diagnose naar EventVOX sturen</button></div>
-      <p class="hint" id="diag-status"></p>
-      <details><summary>Logboek</summary><pre class="log" id="log"></pre></details>
-    </div>
-
-    <div class="card danger">
-      <h2><span class="ic">⚠️</span>Kiosk verlaten</h2>
-      <div class="row col">
-        <button class="btn" data-confirm="leave">App sluiten (naar Android-instellingen)</button>
-        <button class="btn red" data-confirm="removeOwner">Kiosk-modus definitief uitschakelen</button>
+    <!-- Netwerk -->
+    <div class="view" data-view="network" data-title="Netwerk" hidden>
+      <div class="card">
+        <dl class="kv" id="net-now"></dl>
+        <div class="row">
+          <button class="btn primary" data-action="networks">Netwerk toevoegen</button>
+          <button class="btn" data-action="wifiSettings">Wifi-instellingen</button>
+        </div>
+        <p class="hint">Ook met een wifi-QR-code: scan hem terwijl dit scherm open is.</p>
+      </div>
+      <div class="card">
+        <h2>Profielen</h2>
+        <p class="hint" id="wifi-status"></p>
       </div>
     </div>
-    <p class="foot">Sluit vanzelf na 3 minuten zonder aanraking.</p>
+
+    <!-- Updates -->
+    <div class="view" data-view="updates" data-title="Updates" hidden>
+      <div class="card">
+        <div class="big-row"><div><div class="big" id="upd-version"></div><div class="hint" id="upd-last"></div></div>
+          <button class="btn primary" data-action="checkUpdate" id="upd-check">Controleren</button></div>
+        <div class="result" id="upd-result" hidden></div>
+        <div class="toggle-row"><span>Automatisch installeren<small>na de start, als het toestel 2 min rustig is</small></span><label class="sw"><input type="checkbox" data-setting="auto_update"><i></i></label></div>
+        <div class="field"><label class="lbl">Kanaal</label>
+          <div class="seg" data-setting="update_channel"><button data-v="stable">Stabiel</button><button data-v="beta">Test</button></div></div>
+      </div>
+      <details class="more"><summary>Meer opties</summary>
+        <div class="card">
+          <div class="toggle-row"><span>Ook periodiek controleren</span>
+            <div class="stepper" data-setting="update_check_hours" data-step="1" data-min="0" data-max="168" data-unit="uur" data-zero="nee"></div></div>
+          <label class="lbl" for="update_url">Update-adres</label>
+          <input id="update_url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <div class="row"><button class="btn" data-save="update_url">Opslaan</button></div>
+        </div>
+      </details>
+    </div>
+
+    <!-- Apparaat -->
+    <div class="view" data-view="device" data-title="Apparaat" hidden>
+      <div class="card"><dl class="kv" id="device"></dl></div>
+      <div class="card">
+        <h2>Diagnose</h2>
+        <div class="row"><button class="btn" data-action="diagnostics">Naar EventVOX sturen</button></div>
+        <p class="hint" id="diag-status"></p>
+        <details><summary>Logboek</summary><pre class="log" id="log"></pre></details>
+      </div>
+    </div>
+
+    <!-- Beveiliging -->
+    <div class="view" data-view="security" data-title="Beveiliging" hidden>
+      <div class="card">
+        <label class="lbl" for="newpin">Nieuwe beheer-PIN</label>
+        <input id="newpin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="4 tot 8 cijfers">
+        <div class="row"><button class="btn primary" data-save="pin">PIN opslaan</button></div>
+        <div class="toggle-row"><span>Tikken om dit menu te openen</span>
+          <div class="stepper" data-setting="menu_taps" data-step="1" data-min="5" data-max="20" data-unit="×"></div></div>
+      </div>
+      <details class="more"><summary>Meer opties</summary>
+        <div class="card">
+          <div class="toggle-row"><span>SSL-fouten negeren<small>alleen voor interne servers</small></span><label class="sw"><input type="checkbox" data-setting="ignore_ssl_errors"><i></i></label></div>
+        </div>
+      </details>
+    </div>
+
+    <!-- Kiosk verlaten -->
+    <div class="view" data-view="leave" data-title="Kiosk verlaten" hidden>
+      <div class="card">
+        <h2>App sluiten</h2>
+        <p class="hint">Naar de Android-instellingen. Open de app opnieuw of herstart het toestel om terug te gaan.</p>
+        <div class="row"><button class="btn" data-confirm="leave">App sluiten</button></div>
+      </div>
+      <div class="card danger">
+        <h2>Kiosk-modus uitschakelen</h2>
+        <p class="hint">Het toestel wordt weer een gewoon Android-toestel. Opnieuw inrichten kan alleen met het provision-script.</p>
+        <div class="row"><button class="btn red" data-confirm="removeOwner">Definitief uitschakelen</button></div>
+      </div>
+    </div>
   </main>
 </section>
 

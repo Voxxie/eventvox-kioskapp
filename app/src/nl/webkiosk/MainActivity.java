@@ -2282,6 +2282,13 @@ public class MainActivity extends Activity {
         o.put("update", u);
         o.put("wifi", wifiStatus());
         o.put("pinDefault", "1234".equals(pin()));
+        // Voor het overzicht van het beheerscherm: de huidige wifi-verbinding en welke instellingen uit EventVOX komen
+        o.put("wifiNow", wifiJson());
+        JSONArray remoteKeys = new JSONArray();
+        if (prefs.getInt("remote_settings_version", 0) > 0) {
+            for (String k : prefs.getString("remote_settings_keys", "").split(",\\s*")) if (!k.isEmpty()) remoteKeys.put(k);
+        }
+        o.put("remoteKeys", remoteKeys);
         JSONObject health = new JSONObject();
         health.put("crashes", renderCrashes);
         health.put("lastCrash", lastCrashAt > 0 ? new java.text.SimpleDateFormat("d-M HH:mm").format(new java.util.Date(lastCrashAt)) : "");

@@ -34,21 +34,18 @@ Daarna: statusbalk uit, home/recent-knoppen werken niet, de app start na een her
 USB-foutopsporing kun je daarna weer uitzetten.
 
 ## Beheerscherm op het toestel
-Tik **10x snel op dezelfde plek** op het scherm (maximaal ~0,7 s tussen de tikken) en voer de PIN in op het toetsenblok
-(standaard `1234`; na 5 keer fout 1 minuut geblokkeerd). Het beheerscherm (`app/assets/admin.html`) heeft:
+Tik **10x snel op dezelfde plek** en voer de PIN in (of scan een beheer-QR-code). Het beheerscherm opent op een
+**overzicht**:
+- **Status**: Netwerk, Accu, NFC, Scanner, Updates en Kiosk; grijs als alles goed is, oranje of rood als er iets is.
+  Tik op een tegel voor de details.
+- **Snelle acties**: *Pagina herladen*, *Netwerk toevoegen* en *Scan testen* (barcode en NFC; gaat niet naar de website).
+- **Menu**, met een korte samenvatting per onderdeel: Website, Scannen (scanner en NFC), Scherm en geluid, Netwerk,
+  Updates, Apparaat (met logboek en diagnose) en Beveiliging (PIN, aantal tikken).
+- **Kiosk verlaten** staat apart onderaan.
 
-- **Website**: adres met `{serial}`, `{version}`, `{model}` en een voorbeeld van het ingevulde adres; herladen; cache wissen
-- **NFC**: doorgeven (uit / typen / event / beide), formaat tag-ID, wat typen, Enter na typen, periodiek verversen,
-  **NFC testen** (toont live wat een tag oplevert, zonder het aan de website door te geven), herstarten, Android-NFC
-- **Updates**: huidige versie, nu controleren (met release-notes en *Nu installeren*), automatisch, interval, update-adres
-- **Scherm en beveiliging**: scherm altijd aan, automatisch herladen, SSL-fouten negeren, aantal tikken, PIN wijzigen
-- **Wifi**: welke profielen de app heeft gezet; wifi-instellingen
-- **Apparaat**: serienummer, model, Android-versie, batterij, kiosk-modus
-- **Kiosk verlaten**: app sluiten (naar Android-instellingen) of kiosk-modus definitief uitschakelen, met bevestiging
-
-Het scherm sluit vanzelf na 3 minuten zonder aanraking; de terugknop sluit het ook.
-Instellingen uit het beheerscherm blijven bewaard. Een **nieuw of gewijzigd** `webkiosk.properties`-bestand overschrijft
-ze bij de volgende start; een ongewijzigd bestand niet.
+In de detailschermen staan de gewone instellingen bovenaan; zelden gebruikte onder **Meer opties**. Een instelling die
+uit EventVOX komt, heeft het labeltje **via EventVOX**. Terug naar het overzicht met het pijltje of de terugknop; het
+scherm sluit vanzelf na 3 minuten zonder aanraking.
 
 ## URL later wijzigen
 - Via het beheermenu op het toestel, of

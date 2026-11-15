@@ -64,7 +64,7 @@ zonder tussenversies. Daarom:
 | `DataWedge.java` | Eigen DataWedge-profiel "EventVOX-Webkiosk" (scanner aan, toetsaanslagen uit, scan als intent `nl.webkiosk.SCAN`). |
 | `TokenVault.java` | Geheim versleuteld in de Android Keystore (AES-GCM): het terminal-token van de scanterminal. |
 | `KioskLog.java` | Logboek op het toestel (laatste 300 regels) voor diagnose. |
-| `app/assets/admin.*` | Beheerscherm (HTML, opent na 10× tikken op dezelfde plek + PIN). Praat via `window.Kiosk`. |
+| `app/assets/admin.*` | Beheerscherm (HTML, opent na 10× tikken op dezelfde plek + PIN of een beheer-QR-code). Een overzicht (statustegels, snelle acties, menu) en detailschermen (`.view[data-view]`, `go()`); zeldzame opties onder *Meer opties*; instellingen uit EventVOX krijgen *via EventVOX* (`remoteKeys`). Praat via `window.Kiosk`. |
 | `app/assets/wifi.*` | Scherm "Netwerk toevoegen" (offline): wifi-QR-code of netwerk in de buurt. Praat via `window.WifiQr`. |
 | `app/stubs/` | Alleen om te compileren (zie boven). |
 | `webkiosk.properties` | Voorbeeldconfiguratie; wordt op `/sdcard/webkiosk.properties` gezet door `provision.*`. |
