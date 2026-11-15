@@ -88,78 +88,8 @@ public class MainActivity extends Activity {
         if (prefs.getBoolean("keep_screen_on", false))
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        web = new WebView(this);
-        web.setBackgroundColor(Color.WHITE);
-        WebSettings s = web.getSettings();
-        // Naam + versie in de user agent: de EventVOX-backend bewaart die per terminal (Kiosk-app op de terminalpagina)
-        s.setUserAgentString(s.getUserAgentString() + " EventVOX-Webkiosk/" + appVersion());
-        s.setJavaScriptEnabled(true);
-        s.setDomStorageEnabled(true);
-        s.setDatabaseEnabled(true);
-        s.setLoadWithOverviewMode(true);
-        s.setUseWideViewPort(true);
-        s.setBuiltInZoomControls(false);
-        s.setSupportZoom(false);
-        s.setMediaPlaybackRequiresUserGesture(false);
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
-        s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        CookieManager.getInstance().setAcceptCookie(true);
-        CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
-
-        web.setWebViewClient(new WebViewClient() {
-            @Override public boolean shouldOverrideUrlLoading(WebView v, String url) {
-                if (url.startsWith("http:") || url.startsWith("https:") || url.startsWith("about:")
-                        || url.startsWith("file:") || url.startsWith("data:")) return false;
-                return true; // geen externe apps (tel:, mailto:, intent:) openen
-            }
-            @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap f) {
-                pageError = false;
-                v.evaluateJavascript(BATTERY_POLYFILL + VIBRATE_POLYFILL, null); // zo vroeg mogelijk: vóór de scripts van de pagina
-            }
-            @Override public void onPageCommitVisible(WebView v, String url) {
-                v.evaluateJavascript(BATTERY_POLYFILL + VIBRATE_POLYFILL, null);
-            }
-            @Override public void onPageFinished(WebView v, String url) {
-                v.evaluateJavascript(BATTERY_POLYFILL + VIBRATE_POLYFILL, null);
-                focusWeb();
-            }
-            @SuppressWarnings("deprecation")
-            @Override public void onReceivedError(WebView v, int code, String desc, String url) {
-                showError(desc);
-            }
-            @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
-                if (r.isForMainFrame()) showError(String.valueOf(e.getDescription()));
-            }
-            @Override public void onReceivedSslError(WebView v, SslErrorHandler h, SslError e) {
-                if (prefs.getBoolean("ignore_ssl_errors", false)) h.proceed(); else { h.cancel(); showError("SSL-fout"); }
-            }
-        });
-        web.setWebChromeClient(new WebChromeClient() {
-            @Override public void onGeolocationPermissionsShowPrompt(String o, GeolocationPermissions.Callback cb) {
-                cb.invoke(o, true, false);
-            }
-        });
-
         nfc = NfcAdapter.getDefaultAdapter(this);
-        web.addJavascriptInterface(new Object() {
-            @JavascriptInterface public boolean nfcAvailable() { return nfc != null; }
-            @JavascriptInterface public boolean nfcEnabled() { return nfc != null && nfc.isEnabled(); }
-            @JavascriptInterface public String getBattery() { return batteryJson(lastBattery).toString(); }
-            @JavascriptInterface public String getSerial() { return serial(); }
-            /** pattern: JSON-array in ms (aan, uit, aan, ...) of één getal; [] of 0 stopt het trillen. */
-            @JavascriptInterface public boolean vibrate(String pattern) { return doVibrate(pattern); }
-            /** De wifi-verbinding: { connected, level 0-4, rssi (dBm), ssid?, link_speed (Mbps), frequency (MHz) } */
-            @JavascriptInterface public String getWifi() { return wifiJson().toString(); }
-            @JavascriptInterface public String getDeviceInfo() {
-                JSONObject o = new JSONObject();
-                try {
-                    o.put("serial", serial()); o.put("model", Build.MODEL); o.put("manufacturer", Build.MANUFACTURER);
-                    o.put("android", Build.VERSION.RELEASE); o.put("sdk", Build.VERSION.SDK_INT);
-                    o.put("build", Build.DISPLAY); o.put("appVersion", appVersion());
-                } catch (Exception ignored) {}
-                return o.toString();
-            }
-        }, "WebKiosk");
+        web = createWeb();
 
         lastBattery = registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
         IntentFilter wf = new IntentFilter(Intent.ACTION_SCREEN_ON);
@@ -190,6 +120,95 @@ public class MainActivity extends Activity {
         schedulePeriodicReload();
         handler.postDelayed(updateCheck, 60000); // eerste controle 1 minuut na start
         handler.postDelayed(offlineCheck, 5000);
+        handler.postDelayed(nightlyCheck, 60000);
+        handler.postDelayed(dimCheck, 15000);
+        KioskLog.add(this, "App gestart, versie " + appVersion() + (isOwner() ? "" : " (geen device owner)"));
+    }
+
+    /** De WebView van de website, met alles wat de app eraan toevoegt (opnieuw gemaakt na een crash) */
+    private WebView createWeb() {
+        final WebView w = new WebView(this);
+        w.setBackgroundColor(Color.WHITE);
+        WebSettings s = w.getSettings();
+        // Naam + versie in de user agent: de EventVOX-backend bewaart die per terminal (Kiosk-app op de terminalpagina)
+        s.setUserAgentString(s.getUserAgentString() + " EventVOX-Webkiosk/" + appVersion());
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true);
+        s.setLoadWithOverviewMode(true);
+        s.setUseWideViewPort(true);
+        s.setBuiltInZoomControls(false);
+        s.setSupportZoom(false);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        CookieManager.getInstance().setAcceptCookie(true);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(w, true);
+
+        w.setWebViewClient(new WebViewClient() {
+            @Override public boolean shouldOverrideUrlLoading(WebView v, String url) {
+                if (url.startsWith("http:") || url.startsWith("https:") || url.startsWith("about:")
+                        || url.startsWith("file:") || url.startsWith("data:")) return false;
+                return true; // geen externe apps (tel:, mailto:, intent:) openen
+            }
+            @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap f) {
+                pageError = false;
+                v.evaluateJavascript(BATTERY_POLYFILL + VIBRATE_POLYFILL, null); // zo vroeg mogelijk: vóór de scripts van de pagina
+            }
+            @Override public void onPageCommitVisible(WebView v, String url) {
+                v.evaluateJavascript(BATTERY_POLYFILL + VIBRATE_POLYFILL, null);
+            }
+            @Override public void onPageFinished(WebView v, String url) {
+                v.evaluateJavascript(BATTERY_POLYFILL + VIBRATE_POLYFILL, null);
+                focusWeb();
+                checkTerminalToken(v, url);
+            }
+            /** Android 8+: het proces van de pagina is gecrasht of door Android gestopt (geheugen); niet de hele app */
+            public boolean onRenderProcessGone(WebView v, android.webkit.RenderProcessGoneDetail detail) {
+                rebuildWeb(detail != null && detail.didCrash() ? "pagina gecrasht" : "pagina gestopt door Android (geheugen)", true);
+                return true;
+            }
+            @SuppressWarnings("deprecation")
+            @Override public void onReceivedError(WebView v, int code, String desc, String url) {
+                showError(desc);
+            }
+            @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
+                if (r.isForMainFrame()) showError(String.valueOf(e.getDescription()));
+            }
+            @Override public void onReceivedSslError(WebView v, SslErrorHandler h, SslError e) {
+                if (prefs.getBoolean("ignore_ssl_errors", false)) h.proceed(); else { h.cancel(); showError("SSL-fout"); }
+            }
+        });
+        w.setWebChromeClient(new WebChromeClient() {
+            @Override public void onGeolocationPermissionsShowPrompt(String o, GeolocationPermissions.Callback cb) {
+                cb.invoke(o, true, false);
+            }
+        });
+
+        w.addJavascriptInterface(new Object() {
+            @JavascriptInterface public boolean nfcAvailable() { return nfc != null; }
+            @JavascriptInterface public boolean nfcEnabled() { return nfc != null && nfc.isEnabled(); }
+            @JavascriptInterface public String getBattery() { return batteryJson(lastBattery).toString(); }
+            @JavascriptInterface public String getSerial() { return serial(); }
+            /** pattern: JSON-array in ms (aan, uit, aan, ...) of één getal; [] of 0 stopt het trillen. */
+            @JavascriptInterface public boolean vibrate(String pattern) { return doVibrate(pattern); }
+            /** De wifi-verbinding: { connected, level 0-4, rssi (dBm), ssid?, link_speed (Mbps), frequency (MHz) } */
+            @JavascriptInterface public String getWifi() { return wifiJson().toString(); }
+            /** De staat van de app voor de heartbeat (EventVOX: terminalpagina); met log als om een diagnose is gevraagd */
+            @JavascriptInterface public String getStatus() { return statusJson().toString(); }
+            /** EventVOX vraagt een diagnose: het logboek gaat mee met de volgende getStatus() */
+            @JavascriptInterface public void requestDiagnostics() { diagnosticsPending = true; KioskLog.add(MainActivity.this, "Diagnose gevraagd door EventVOX"); }
+            @JavascriptInterface public String getDeviceInfo() {
+                JSONObject o = new JSONObject();
+                try {
+                    o.put("serial", serial()); o.put("model", Build.MODEL); o.put("manufacturer", Build.MANUFACTURER);
+                    o.put("android", Build.VERSION.RELEASE); o.put("sdk", Build.VERSION.SDK_INT);
+                    o.put("build", Build.DISPLAY); o.put("appVersion", appVersion());
+                } catch (Exception ignored) {}
+                return o.toString();
+            }
+        }, "WebKiosk");
+        return w;
     }
 
     // ---------- configuratie ----------
@@ -238,7 +257,13 @@ public class MainActivity extends Activity {
             if (uu != null) e.putString("update_url", uu.trim());
             String au = p.getProperty("auto_update");
             if (au != null) e.putBoolean("auto_update", Boolean.parseBoolean(au.trim()));
-            for (String key : new String[]{"nfc_refresh_seconds", "nfc_debounce_ms", "update_check_hours"}) {
+            for (String key : new String[]{"nightly_reload"}) {
+                String v = p.getProperty(key);
+                if (v != null) e.putBoolean(key, Boolean.parseBoolean(v.trim()));
+            }
+            String ch = p.getProperty("update_channel");
+            if (ch != null && !ch.trim().isEmpty()) e.putString("update_channel", ch.trim().toLowerCase());
+            for (String key : new String[]{"nfc_refresh_seconds", "nfc_debounce_ms", "update_check_hours", "volume_lock", "dim_minutes", "dim_level", "nightly_hour"}) {
                 String v = p.getProperty(key);
                 if (v != null) try { e.putInt(key, Integer.parseInt(v.trim())); } catch (NumberFormatException ignored) {}
             }
@@ -370,6 +395,7 @@ public class MainActivity extends Activity {
 
     private void showError(String desc) {
         if (pageError) return;
+        KioskLog.add(this, "Pagina laadt niet: " + desc);
         pageError = true;
         web.loadDataWithBaseURL(null, page("Geen verbinding",
             "De pagina kon niet worden geladen (" + escape(desc) + ").<br>Opnieuw proberen over 10 seconden&hellip;"),
@@ -474,6 +500,7 @@ public class MainActivity extends Activity {
 
     private void leaveKiosk() {
         kioskSuspended = true;
+        try { if (isOwner()) dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_ADJUST_VOLUME); } catch (Exception ignored) {}
         try { stopLockTask(); } catch (Exception ignored) {}
         if (isOwner() && Build.VERSION.SDK_INT >= 23) {
             try { dpm.setStatusBarDisabled(admin, false); } catch (Exception ignored) {}
@@ -544,6 +571,7 @@ public class MainActivity extends Activity {
         }
         resumed = true;
         focusWeb();
+        applyVolume();
         hideSystemUi();
         enterKiosk();
         restartNfc("onResume");
@@ -686,6 +714,7 @@ public class MainActivity extends Activity {
 
     /** Wordt op een achtergrondthread aangeroepen. */
     private void handleTag(Tag tag) {
+        markActivity();
         final String uid = formatUid(tag.getId());
         long now = System.currentTimeMillis();
         boolean dup = uid.equals(lastTagUid) && now - lastTagTime < prefs.getInt("nfc_debounce_ms", 1500);
@@ -770,6 +799,8 @@ public class MainActivity extends Activity {
             String sig = w.optBoolean("connected") + "|" + w.optInt("level", -1) + "|" + w.optString("ssid");
             if (web == null || sig.equals(lastWifiSig)) return;
             lastWifiSig = sig;
+            KioskLog.add(MainActivity.this, w.optBoolean("connected") ? "Wifi verbonden" + (w.has("ssid") ? " met " + w.optString("ssid") : "")
+                + ", niveau " + w.optInt("level") + " (" + w.optInt("rssi") + " dBm)" : "Wifi niet verbonden");
             web.evaluateJavascript("(function(d){try{window.dispatchEvent(new CustomEvent('webkiosk-wifi',{detail:d}));}catch(e){}"
                 + "if(typeof window.onWebKioskWifi==='function')window.onWebKioskWifi(d);})(" + w + ");", null);
         }
@@ -911,6 +942,7 @@ public class MainActivity extends Activity {
     }
 
     private void wifiEmit(String state, String text) {
+        if (!"connecting".equals(state)) KioskLog.add(this, "Wifi: " + text);
         JSONObject d = new JSONObject();
         try { d.put("type", "status"); d.put("state", state); d.put("text", text); } catch (Exception ignored) {}
         if (wifiView != null) wifiView.evaluateJavascript("window.wifiEvent&&window.wifiEvent(" + d + ")", null);
@@ -1073,6 +1105,195 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void close() { runOnUiThread(new Runnable() { public void run() { hideWifiView(); } }); }
     }
 
+    // ---------- herstel na een crash van de pagina ----------
+
+    private int renderCrashes = 0;
+    private long lastCrashAt = 0;
+    private final java.util.LinkedList<Long> recentCrashes = new java.util.LinkedList<>();
+
+    /** Een nieuwe WebView in plaats van de oude (na een crash, of 's nachts om geheugen vrij te maken) en de website laden */
+    private void rebuildWeb(String reason, boolean crash) {
+        KioskLog.add(this, (crash ? "Herstel: " : "Herladen: ") + reason);
+        long now = System.currentTimeMillis();
+        if (crash) {
+            renderCrashes++;
+            lastCrashAt = now;
+            recentCrashes.add(now);
+            while (!recentCrashes.isEmpty() && now - recentCrashes.getFirst() > 60000) recentCrashes.removeFirst();
+        }
+        WebView old = web;
+        web = createWeb();
+        int index = old != null ? root.indexOfChild(old) : 0;
+        if (old != null) { root.removeView(old); try { old.destroy(); } catch (Exception ignored) {} }
+        root.addView(web, Math.max(0, index), new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        focusWeb();
+        // Drie crashes binnen een minuut: even wachten, anders blijft het rondgaan
+        if (crash && recentCrashes.size() >= 3) {
+            KioskLog.add(this, "Herstel: 3 crashes binnen een minuut, 30 s wachten");
+            handler.postDelayed(new Runnable() { public void run() { loadHome(); } }, 30000);
+        } else {
+            loadHome();
+        }
+    }
+
+    // ---------- terminal-identiteit bewaren (token van de EventVOX-scanterminal) ----------
+
+    /*
+     * De scanterminal bewaart zijn token in localStorage. Gaat dat verloren (cache gewist, beschadigde opslag), dan zou
+     * hij zich als nieuwe terminal aanmelden. De app bewaart daarom een kopie (versleuteld in de Android Keystore,
+     * samen met het adres) en zet die terug als het token ontbreekt, waarna de pagina één keer herlaadt. Verdwijnt een
+     * teruggezet token direct weer (EventVOX heeft de terminal ingetrokken en de pagina wist het), dan gaat de kopie
+     * weg: de terminal koppelt dan gewoon opnieuw, en de app bewaart het nieuwe token.
+     */
+    private static final String TERMINAL_TOKEN_KEY = "eventvox.terminal.token";
+    private long tokenRestoredAt = 0;
+
+    private static String originOf(String url) {
+        try { java.net.URL u = new java.net.URL(url); return u.getProtocol() + "://" + u.getHost() + (u.getPort() > 0 ? ":" + u.getPort() : ""); }
+        catch (Exception e) { return null; }
+    }
+
+    private void checkTerminalToken(final WebView v, final String url) {
+        if (url == null || !url.startsWith("http") || !url.contains("/scanterminal")) return;
+        final String origin = originOf(url);
+        if (origin == null) return;
+        v.evaluateJavascript("(function(){try{return localStorage.getItem('" + TERMINAL_TOKEN_KEY + "')||''}catch(e){return null}})()",
+            new ValueCallback<String>() {
+                public void onReceiveValue(String raw) {
+                    if (raw == null || raw.equals("null") || v != web) return; // geen opslag, of al een andere WebView
+                    String token;
+                    try { token = new JSONArray("[" + raw + "]").getString(0); } catch (Exception e) { return; }
+                    String saved = TokenVault.get(prefs, "terminal_token");
+                    String savedOrigin = saved == null ? null : saved.substring(0, Math.max(0, saved.indexOf('\n')));
+                    String savedToken = saved == null ? null : saved.substring(saved.indexOf('\n') + 1);
+                    if (!token.isEmpty()) {
+                        if (!token.equals(savedToken) || !origin.equals(savedOrigin)) {
+                            TokenVault.put(prefs, "terminal_token", origin + "\n" + token);
+                            KioskLog.add(MainActivity.this, savedToken == null ? "Terminal-identiteit bewaard" : "Terminal-identiteit bijgewerkt (nieuw gekoppeld)");
+                        }
+                        return;
+                    }
+                    if (savedToken == null || !origin.equals(savedOrigin)) return;
+                    if (tokenRestoredAt > 0 && System.currentTimeMillis() - tokenRestoredAt < 600000) {
+                        // Net teruggezet en weer weg: EventVOX heeft de terminal ingetrokken; niet blijven terugzetten
+                        TokenVault.put(prefs, "terminal_token", null);
+                        tokenRestoredAt = 0;
+                        KioskLog.add(MainActivity.this, "Terminal-identiteit vervallen (ingetrokken in EventVOX): opnieuw koppelen");
+                        return;
+                    }
+                    tokenRestoredAt = System.currentTimeMillis();
+                    KioskLog.add(MainActivity.this, "Terminal-identiteit teruggezet na verlies van de opslag");
+                    v.evaluateJavascript("try{localStorage.setItem('" + TERMINAL_TOKEN_KEY + "'," + JSONObject.quote(savedToken) + ")}catch(e){}",
+                        new ValueCallback<String>() { public void onReceiveValue(String ignored) { v.reload(); } });
+                }
+            });
+    }
+
+    // ---------- 's nachts herladen ----------
+
+    /** Elke minuut: na nightly_hour (standaard 4 uur) één keer per nacht een verse WebView, als het toestel 5 min rustig is */
+    private final Runnable nightlyCheck = new Runnable() {
+        public void run() {
+            handler.postDelayed(this, 60000);
+            if (!prefs.getBoolean("nightly_reload", true)) return;
+            java.util.Calendar c = java.util.Calendar.getInstance();
+            int hour = prefs.getInt("nightly_hour", 4);
+            String today = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(c.getTime());
+            if (today.equals(prefs.getString("nightly_done", ""))) return;
+            int h = c.get(java.util.Calendar.HOUR_OF_DAY);
+            if (h < hour || h >= hour + 3) return; // alleen in de 3 uur erna; daarna wachten tot de volgende nacht
+            if (SystemClock.uptimeMillis() - lastActivity < 300000 || adminView != null || wifiView != null) return;
+            prefs.edit().putString("nightly_done", today).apply();
+            rebuildWeb("nachtelijk herladen", false);
+        }
+    };
+
+    // ---------- volume vast ----------
+
+    /** volume_lock: percentage (standaard 80, 0 = uit) voor het geluid van de pagina; de volumeknoppen doen dan niets */
+    @SuppressWarnings("deprecation")
+    private void applyVolume() {
+        int pct = prefs.getInt("volume_lock", 80);
+        try {
+            android.media.AudioManager am = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
+            if (isOwner()) dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_ADJUST_VOLUME);
+            if (pct <= 0 || am == null) return;
+            int max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC);
+            am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, Math.max(1, Math.round(max * Math.min(100, pct) / 100f)), 0);
+            if (isOwner()) dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_ADJUST_VOLUME);
+        } catch (Exception ignored) {}
+    }
+
+    private boolean volumeLocked() { return prefs.getInt("volume_lock", 80) > 0; }
+
+    // ---------- scherm dimmen ----------
+
+    private long lastActivity = SystemClock.uptimeMillis();
+    private boolean dimmed = false;
+
+    /** Aanraking, toets, scan of NFC: het toestel wordt gebruikt (fel scherm, geen update of nachtelijk herladen) */
+    private void markActivity() {
+        lastActivity = SystemClock.uptimeMillis();
+        lastTouch = lastActivity;
+        if (dimmed) runOnUiThread(new Runnable() { public void run() { setBrightness(-1f); } });
+    }
+
+    private void setBrightness(float level) {
+        WindowManager.LayoutParams lp = getWindow().getAttributes();
+        lp.screenBrightness = level; // -1: zoals Android hem heeft
+        getWindow().setAttributes(lp);
+        dimmed = level >= 0;
+    }
+
+    /** Alleen met "scherm altijd aan" (anders gaat het scherm vanzelf uit): na dim_minutes zonder gebruik dimmen */
+    private final Runnable dimCheck = new Runnable() {
+        public void run() {
+            handler.postDelayed(this, 15000);
+            int minutes = prefs.getInt("dim_minutes", 2);
+            boolean want = prefs.getBoolean("keep_screen_on", false) && minutes > 0 && adminView == null && wifiView == null
+                && SystemClock.uptimeMillis() - lastActivity > minutes * 60000L;
+            if (want && !dimmed) setBrightness(Math.max(1, Math.min(100, prefs.getInt("dim_level", 15))) / 100f);
+            else if (!want && dimmed) setBrightness(-1f);
+        }
+    };
+
+    // ---------- status en diagnose voor EventVOX ----------
+
+    private volatile boolean diagnosticsPending = false;
+    private final long startedAt = System.currentTimeMillis();
+
+    private static String iso(long ms) {
+        if (ms <= 0) return null;
+        java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", java.util.Locale.ROOT);
+        return f.format(new java.util.Date(ms));
+    }
+
+    private JSONObject statusJson() {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("version", appVersion());
+            o.put("channel", prefs.getString("update_channel", "stable"));
+            o.put("uptime_s", (System.currentTimeMillis() - startedAt) / 1000);
+            o.put("crashes", renderCrashes);
+            if (lastCrashAt > 0) o.put("last_crash_at", iso(lastCrashAt));
+            o.put("nfc_restarts", nfcRestarts);
+            JSONObject w = wifiJson();
+            w.remove("enabled");
+            o.put("wifi", w);
+            JSONObject u = new JSONObject();
+            long checked = prefs.getLong("update_last_check", 0);
+            if (checked > 0) u.put("checked_at", iso(checked));
+            u.put("result", prefs.getString("update_last_result", ""));
+            o.put("update", u);
+            if (diagnosticsPending) {
+                diagnosticsPending = false;
+                o.put("log", KioskLog.text(this));
+                prefs.edit().putLong("diagnostics_sent", System.currentTimeMillis()).apply();
+            }
+        } catch (Exception ignored) {}
+        return o;
+    }
+
     // ---------- trillen ----------
 
     /** Trillen volgens een webpatroon [aan, uit, aan, ...] (ms); uit met vibrate=false in de config of het beheerscherm. */
@@ -1117,6 +1338,11 @@ public class MainActivity extends Activity {
         int k = e.getKeyCode();
         boolean system = k == KeyEvent.KEYCODE_BACK || k == KeyEvent.KEYCODE_HOME || k == KeyEvent.KEYCODE_VOLUME_UP
             || k == KeyEvent.KEYCODE_VOLUME_DOWN || k == KeyEvent.KEYCODE_POWER || k == KeyEvent.KEYCODE_APP_SWITCH;
+        markActivity();
+        if ((k == KeyEvent.KEYCODE_VOLUME_UP || k == KeyEvent.KEYCODE_VOLUME_DOWN) && volumeLocked()) {
+            if (e.getAction() == KeyEvent.ACTION_DOWN) applyVolume(); // vast volume: de knoppen doen niets
+            return true;
+        }
         if (system) return super.dispatchKeyEvent(e);
         if (wifiQrEnabled() && catchWifiKeys(e)) return true;
         return routeKey(e);
@@ -1265,6 +1491,7 @@ public class MainActivity extends Activity {
     }
 
     private void deliverScan(String data, String symbology) {
+        markActivity();
         if (data.regionMatches(true, 0, "WIFI:", 0, 5)) { handleWifiQr(data); return; } // nooit naar de website
         lastScan = data + (symbology.isEmpty() ? "" : " (" + symbology + ")");
         JSONObject o = new JSONObject();
@@ -1346,7 +1573,8 @@ public class MainActivity extends Activity {
 
     private String updateUrl() {
         String u = prefs.getString("update_url", "");
-        return u.isEmpty() ? Updater.DEFAULT_URL : u;
+        if (!u.isEmpty()) return u;
+        return "beta".equals(prefs.getString("update_channel", "stable")) ? Updater.BETA_URL : Updater.DEFAULT_URL;
     }
 
     /** Bij het starten (1 minuut erna) en, alleen als update_check_hours > 0, daarna periodiek. */
@@ -1372,6 +1600,7 @@ public class MainActivity extends Activity {
                 .putString("update_last_result", fe != null ? "fout: " + fe
                     : (fi.versionCode > Updater.currentVersionCode(MainActivity.this) ? "nieuw: " + fi.versionName : "actueel")).apply();
             updateBusy = false;
+            KioskLog.add(MainActivity.this, "Update-controle: " + prefs.getString("update_last_result", ""));
             runOnUiThread(new Runnable() { public void run() { onUpdateInfo(fi, fe, interactive); } });
         }}).start();
     }
@@ -1412,6 +1641,7 @@ public class MainActivity extends Activity {
         new Thread(new Runnable() { public void run() {
             String err = null;
             try {
+                KioskLog.add(MainActivity.this, "Update " + info.versionName + " downloaden en installeren");
                 java.io.File apk = Updater.download(MainActivity.this, info);
                 Updater.install(MainActivity.this, apk);
             } catch (Exception e) { err = e.getMessage(); }
@@ -1427,7 +1657,7 @@ public class MainActivity extends Activity {
     // ---------- verborgen beheermenu ----------
 
     @Override public boolean dispatchTouchEvent(MotionEvent ev) {
-        lastTouch = SystemClock.uptimeMillis();
+        markActivity();
         if (adminView != null) {
             handler.removeCallbacks(adminTimeout);
             handler.postDelayed(adminTimeout, ADMIN_IDLE_MS);
@@ -1481,6 +1711,7 @@ public class MainActivity extends Activity {
         if (!isOwner()) { Toast.makeText(this, "Geen device owner", Toast.LENGTH_SHORT).show(); return; }
         try {
             dpm.clearPackagePersistentPreferredActivities(admin, getPackageName());
+            dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_ADJUST_VOLUME);
             if (Build.VERSION.SDK_INT >= 23) { dpm.setStatusBarDisabled(admin, false); dpm.setKeyguardDisabled(admin, false); }
             try { stopLockTask(); } catch (Exception ignored) {}
             dpm.clearDeviceOwnerApp(getPackageName());
@@ -1497,6 +1728,7 @@ public class MainActivity extends Activity {
 
     private void showAdmin() {
         if (adminView != null) return;
+        markActivity();
         adminUnlocked = false;
         adminView = new WebView(this);
         adminView.setBackgroundColor(Color.parseColor("#5e2572"));
@@ -1561,6 +1793,12 @@ public class MainActivity extends Activity {
         st.put("reload_minutes", prefs.getInt("reload_minutes", 0));
         st.put("ignore_ssl_errors", prefs.getBoolean("ignore_ssl_errors", false));
         st.put("vibrate", prefs.getBoolean("vibrate", true));
+        st.put("update_channel", prefs.getString("update_channel", "stable"));
+        st.put("volume_lock", prefs.getInt("volume_lock", 80));
+        st.put("dim_minutes", prefs.getInt("dim_minutes", 2));
+        st.put("dim_level", prefs.getInt("dim_level", 15));
+        st.put("nightly_reload", prefs.getBoolean("nightly_reload", true));
+        st.put("nightly_hour", prefs.getInt("nightly_hour", 4));
         st.put("menu_taps", prefs.getInt("menu_taps", 10));
         st.put("scan_mode", scanMode());
         st.put("datawedge", manageDataWedge() ? "app" : "off");
@@ -1578,6 +1816,20 @@ public class MainActivity extends Activity {
         u.put("defaultUrl", Updater.DEFAULT_URL);
         o.put("update", u);
         o.put("wifi", wifiStatus());
+        o.put("pinDefault", "1234".equals(pin()));
+        JSONObject health = new JSONObject();
+        health.put("crashes", renderCrashes);
+        health.put("lastCrash", lastCrashAt > 0 ? new java.text.SimpleDateFormat("d-M HH:mm").format(new java.util.Date(lastCrashAt)) : "");
+        long diag = prefs.getLong("diagnostics_sent", 0);
+        health.put("diagnosticsSent", diag > 0 ? new java.text.SimpleDateFormat("d-M HH:mm").format(new java.util.Date(diag)) : "");
+        health.put("diagnosticsPending", diagnosticsPending);
+        health.put("identity", TokenVault.get(prefs, "terminal_token") != null);
+        String log = KioskLog.text(this);
+        String[] lines = log.split("\n");
+        StringBuilder tail = new StringBuilder();
+        for (int i = Math.max(0, lines.length - 40); i < lines.length; i++) tail.append(lines[i]).append('\n');
+        health.put("log", tail.toString());
+        o.put("health", health);
         JSONObject sc = new JSONObject();
         sc.put("installed", DataWedge.installed(this));
         sc.put("status", prefs.getString("dw_status", ""));
@@ -1633,9 +1885,9 @@ public class MainActivity extends Activity {
         }
     }
 
-    private static final java.util.List<String> STRING_KEYS = java.util.Arrays.asList("nfc_mode", "nfc_uid_format", "nfc_keyboard_value", "scan_mode", "datawedge");
-    private static final java.util.List<String> BOOL_KEYS = java.util.Arrays.asList("nfc_send_enter", "auto_update", "keep_screen_on", "ignore_ssl_errors", "vibrate");
-    private static final java.util.List<String> INT_KEYS = java.util.Arrays.asList("nfc_refresh_seconds", "update_check_hours", "reload_minutes", "menu_taps");
+    private static final java.util.List<String> STRING_KEYS = java.util.Arrays.asList("nfc_mode", "nfc_uid_format", "nfc_keyboard_value", "scan_mode", "datawedge", "update_channel");
+    private static final java.util.List<String> BOOL_KEYS = java.util.Arrays.asList("nfc_send_enter", "auto_update", "keep_screen_on", "ignore_ssl_errors", "vibrate", "nightly_reload");
+    private static final java.util.List<String> INT_KEYS = java.util.Arrays.asList("nfc_refresh_seconds", "update_check_hours", "reload_minutes", "menu_taps", "volume_lock", "dim_minutes", "dim_level", "nightly_hour");
 
     /** Eén instelling opslaan en toepassen; geeft een foutmelding of null. */
     private String applySetting(String key, String v) {
@@ -1649,6 +1901,7 @@ public class MainActivity extends Activity {
         }
         if ("pin".equals(key)) {
             if (!v.matches("[0-9]{4,8}")) return "De PIN moet 4 tot 8 cijfers zijn";
+            if (v.equals("1234")) return "Kies een andere PIN dan 1234: die staat openbaar op GitHub";
             e.putString("pin", v).commit();
             return null;
         }
@@ -1674,11 +1927,16 @@ public class MainActivity extends Activity {
             int n;
             try { n = Integer.parseInt(v); } catch (NumberFormatException x) { return "Ongeldig getal"; }
             if ("menu_taps".equals(key) && (n < 5 || n > 20)) return "Kies 5 tot 20 tikken";
+            if ("volume_lock".equals(key)) n = Math.min(100, n);
+            if ("dim_level".equals(key) && (n < 5 || n > 60)) return "Kies 5 tot 60%";
+            if ("nightly_hour".equals(key)) n = Math.min(23, n);
             e.putInt(key, Math.max(0, n));
         } else return "Onbekende instelling: " + key;
         e.commit();
         runOnUiThread(new Runnable() { public void run() {
             applyRuntimeSettings();
+            applyVolume();
+            if (dimmed) setBrightness(-1f);
             schedulePeriodicReload();
             handler.removeCallbacks(updateCheck);
             int h = prefs.getInt("update_check_hours", 0);
@@ -1690,6 +1948,11 @@ public class MainActivity extends Activity {
     private void adminAction(String name, String arg) {
         switch (name) {
             case "close": hideAdmin(); break;
+            case "diagnostics":
+                diagnosticsPending = true;
+                KioskLog.add(this, "Diagnose verstuurd vanaf het toestel");
+                adminToast("De diagnose gaat mee met de volgende heartbeat (binnen een minuut)");
+                break;
             case "networks": hideAdmin(); pendingWifi = null; showWifiView(); break;
             case "vibrateTest":
                 // de patronen van de scanterminal: toegelaten, waarschuwing, geweigerd

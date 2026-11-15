@@ -60,9 +60,24 @@
     // --- Beheer ------------------------------------------------------------------------------------
     function openAdmin() {
         $('#pin').hidden = true;
+        state = call('state');
+        // De standaard-PIN staat openbaar op GitHub: eerst een eigen PIN kiezen
+        if (state.pinDefault) { $('#mustpin').hidden = false; $('#mp1').focus(); return; }
+        $('#mustpin').hidden = true;
         $('#admin').hidden = false;
-        refresh();
+        render();
     }
+
+    $('#mustpin [data-action="close"]').addEventListener('click', function () { K.action('close', ''); });
+    $('#mp-save').addEventListener('click', function () {
+        var a = $('#mp1').value, b = $('#mp2').value;
+        if (!/^[0-9]{4,8}$/.test(a)) { $('#mp-error').textContent = 'De PIN moet 4 tot 8 cijfers zijn'; return; }
+        if (a !== b) { $('#mp-error').textContent = 'De twee PIN-codes zijn niet gelijk'; return; }
+        var r = call('set', 'pin', a);
+        if (r.error) { $('#mp-error').textContent = r.error; return; }
+        toast('Nieuwe PIN opgeslagen');
+        openAdmin();
+    });
 
     function refresh() {
         state = call('state');
@@ -70,6 +85,7 @@
     }
 
     function stepText(el, v) {
+        if (el.getAttribute('data-format') === 'hour') return (v < 10 ? '0' : '') + v + ':00';
         var zero = el.getAttribute('data-zero');
         if (v === 0 && zero) return zero;
         return v + ' ' + el.getAttribute('data-unit');
@@ -114,6 +130,10 @@
         spill.classList.toggle('off', !sc.installed);
         $('#scan-status').textContent = sc.status || '';
 
+        var h = s.health || {};
+        $('#diag-status').textContent = h.diagnosticsPending ? 'Diagnose gaat mee met de volgende heartbeat…'
+            : h.diagnosticsSent ? 'Laatste diagnose verstuurd ' + h.diagnosticsSent : '';
+        $('#log').textContent = h.log || '(leeg)';
         var b = s.battery || {};
         $('#device').innerHTML = [
             ['Serienummer', '<span class="mono">' + esc(s.serial) + '</span>'],
@@ -121,6 +141,8 @@
             ['Android', esc(s.android)],
             ['Batterij', b.level == null ? '—' : b.level + '%' + (b.charging ? ' · laadt op' : '') + (b.temperature ? ' · ' + b.temperature + ' °C' : '')],
             ['Kiosk-modus', s.owner ? 'aan (device owner)' : '<span style="color:var(--red)">uit: geen device owner</span>'],
+            ['Terminal', h.identity ? 'identiteit bewaard (komt terug na een crash)' : 'nog niet gekoppeld of geen scanterminal'],
+            ['Crashes', h.crashes ? h.crashes + ' sinds de start, laatste ' + h.lastCrash + ' (hersteld)' : 'geen sinds de start'],
         ].map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('');
     }
 

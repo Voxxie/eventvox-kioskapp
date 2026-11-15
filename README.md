@@ -223,6 +223,27 @@ interval, en het update-adres. In `webkiosk.properties`: `auto_update`, `update_
 > dat werkt alleen als de repository **openbaar** is. Bij een private repository zet je `update.json` + `webkiosk.apk`
 > op een eigen webserver en vul je dat adres in bij `update_url` (de `url` in update.json mag relatief zijn, bv. `webkiosk.apk`).
 
+## Betrouwbaarheid en beheer
+- **Herstel na een crash**: stopt of crasht de pagina (bv. door geheugengebrek), dan maakt de app hem opnieuw en laadt
+  de website; drie keer binnen een minuut: 30 s wachten. Het aantal crashes staat in het beheerscherm en in EventVOX.
+- **Terminal-identiteit**: de app bewaart het token van de EventVOX-scanterminal versleuteld (Android Keystore) en zet
+  het terug als de opslag van de pagina verloren is (cache gewist, beschadigd). De terminal meldt zich dan als dezelfde
+  terminal aan. Wordt de terminal in EventVOX ingetrokken, dan vervalt de kopie en koppelt hij gewoon opnieuw.
+- **'s Nachts herladen** (`nightly_reload`, `nightly_hour`, standaard 04:00): één keer per nacht een verse pagina, alleen
+  als het toestel 5 minuten niet gebruikt is.
+- **Volume vast** (`volume_lock`, standaard 80%): de piep van de scanterminal blijft hoorbaar; de volumeknoppen doen niets.
+- **Dimmen** (`dim_minutes`, `dim_level`): met *scherm altijd aan* na 2 minuten zonder tik, scan of NFC naar 15%.
+- **Eigen PIN verplicht**: staat de PIN nog op 1234, dan vraagt het beheerscherm eerst een eigen PIN.
+- **Logboek en diagnose**: de app houdt de laatste 300 gebeurtenissen bij (start, crash, wifi, updates, fouten; geen
+  wachtwoorden of tokens). Beheerscherm > Apparaat: *Diagnose naar EventVOX sturen*; in EventVOX kan het ook op afstand
+  worden opgevraagd (terminalpagina). `WebKiosk.getStatus()` geeft de status voor de heartbeat.
+
+## Testkanaal
+Zet één of twee toestellen op **Test** (beheerscherm > Updates, of `update_channel=beta`). Markeer een nieuwe release op
+GitHub eerst als **pre-release**: alleen de testtoestellen krijgen hem. Werkt hij, haal het vinkje weg (of maak een gewone
+release): dan krijgen alle toestellen hem. De workflow houdt hiervoor een pre-release **beta** bij met de nieuwste
+`update.json`; die is geen versie en hoeft niet geïnstalleerd te worden.
+
 ## Releases (APK automatisch bouwen op GitHub)
 Bij elke **gepubliceerde release** bouwt GitHub Actions (`.github/workflows/release.yml`) een ondertekende APK
 en hangt die aan de release: `webkiosk-<versie>.apk`, `webkiosk.apk`, een SHA-256 en een zip met APK + scripts + config.

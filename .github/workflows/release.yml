@@ -7,6 +7,9 @@ name: Release APK
 on:
   release:
     types: [published]
+# Kanalen: stabiel = de nieuwste gewone release (releases/latest/download/update.json, GitHub slaat pre-releases
+# daar over); test = de release "beta" (geen versie, pre-release), waar elke release, ook een pre-release, zijn
+# update.json bij zet (releases/download/beta/update.json). Toestellen kiezen met update_channel=stable|beta.
   workflow_dispatch:
 
 permissions:
@@ -15,6 +18,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    # De rollende release "beta" zelf is geen versie
+    if: github.event_name != 'release' || github.event.release.tag_name != 'beta'
     steps:
       - uses: actions/checkout@v4
 
@@ -102,3 +107,25 @@ jobs:
           path: |
             dist/webkiosk.apk
             webkiosk-${{ steps.version.outputs.name }}.zip
+
+      - name: Testkanaal bijwerken (release "beta")
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # De rollende pre-release "beta" (aanmaken als hij er nog niet is), alleen bijwerken als deze versie hoger is
+          if ! gh release view beta >/dev/null 2>&1; then
+            gh release create beta --prerelease --target "$GITHUB_SHA" --title "Testkanaal" \
+              --notes "Niet installeren: hier staat alleen update.json van de nieuwste release (ook pre-releases) voor toestellen op het testkanaal (update_channel=beta)."
+          fi
+          CURRENT=0
+          if gh release download beta --pattern update.json --output current.json --clobber 2>/dev/null; then
+            CURRENT=$(jq -r '.versionCode // 0' current.json)
+          fi
+          NEW=$(jq -r '.versionCode' dist/update.json)
+          if [ "$NEW" -ge "$CURRENT" ]; then
+            gh release upload beta dist/update.json --clobber
+            echo "Testkanaal: versie $NEW (was $CURRENT)"
+          else
+            echo "Testkanaal blijft op $CURRENT (deze release is $NEW)"
+          fi

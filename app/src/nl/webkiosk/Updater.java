@@ -21,6 +21,9 @@ import java.security.MessageDigest;
 public class Updater {
     public static final String DEFAULT_URL =
         "https://github.com/Voxxie/eventvox-kioskapp/releases/latest/download/update.json";
+    /** Testkanaal: de nieuwste release, ook pre-releases (de workflow zet update.json ook bij de release "beta") */
+    public static final String BETA_URL =
+        "https://github.com/Voxxie/eventvox-kioskapp/releases/download/beta/update.json";
 
     public static class Info {
         public int versionCode; public String versionName, url, sha256, notes;

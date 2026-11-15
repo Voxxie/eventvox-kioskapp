@@ -28,7 +28,10 @@ VERSION_ARGS=()
 
 rm -rf build && mkdir -p build/gen build/classes
 aapt package -f -m -J build/gen -M AndroidManifest.xml -S res -A assets -I "$SDK" "${VERSION_ARGS[@]}" -F build/unsigned.apk
-javac --release 8 -nowarn -Xlint:-options -classpath "$SDK" -d build/classes $(find src build/gen -name '*.java')
+# stubs/: klassen van nieuwere Android-versies, alleen om tegen android-23 te compileren (niet in de APK)
+mkdir -p build/stubs
+javac --release 8 -nowarn -Xlint:-options -classpath "$SDK" -d build/stubs $(find stubs -name '*.java')
+javac --release 8 -nowarn -Xlint:-options -classpath "$SDK:build/stubs" -d build/classes $(find src build/gen -name '*.java')
 dalvik-exchange --dex --output=build/classes.dex build/classes
 (cd build && aapt add unsigned.apk classes.dex >/dev/null)
 zipalign -f 4 build/unsigned.apk build/aligned.apk
