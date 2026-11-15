@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Wifi toevoegen</title>
+<title>Netwerk toevoegen</title>
 <link rel="stylesheet" href="admin.css">
 <link rel="stylesheet" href="wifi.css">
 </head>
@@ -11,21 +11,36 @@
 <section class="pin wifi">
   <div class="pin-top">
     <img src="logo.png" alt="" class="pin-logo">
-    <h1>Wifi-netwerk toevoegen</h1>
-    <p class="muted">Dit toestel heeft geen netwerk. Deze QR-code voegt een netwerk toe:</p>
+    <h1 id="title">Netwerk toevoegen</h1>
+    <p class="muted" id="sub"></p>
   </div>
-  <div class="wifi-card">
-    <div class="wifi-ssid" id="ssid"></div>
+
+  <!-- Een gescande wifi-QR-code -->
+  <div class="wifi-card" id="confirm" hidden>
+    <div class="wifi-label">Wifi-QR-code</div>
+    <div class="wifi-ssid" id="qr-ssid"></div>
     <dl class="kv">
-      <dt>Beveiliging</dt><dd id="security"></dd>
-      <dt>Verborgen</dt><dd id="hidden"></dd>
+      <dt>Beveiliging</dt><dd id="qr-security"></dd>
+      <dt>Verborgen</dt><dd id="qr-hidden"></dd>
     </dl>
-    <div class="wifi-state" id="state" hidden><span class="pulse" id="pulse"></span><span id="state-text"></span></div>
+    <div class="row"><button class="btn primary" id="qr-add">Toevoegen en verbinden</button><button class="btn" id="qr-back">Andere kiezen</button></div>
   </div>
-  <div class="wifi-buttons">
-    <button class="btn primary big" id="add">Toevoegen en verbinden</button>
-    <button class="btn ghost big" id="close">Annuleren</button>
+
+  <div id="choose">
+    <div class="wifi-card option">
+      <div class="option-icon" aria-hidden="true">▦</div>
+      <div><b>Scan een wifi-QR-code</b><div class="hint">Richt de scanner op de code; je ziet hem hier direct.</div></div>
+    </div>
+
+    <div class="wifi-card">
+      <div class="list-head"><b>Netwerken in de buurt</b><button class="btn small" id="refresh">Vernieuwen</button></div>
+      <div class="hint" id="list-hint">Zoeken…</div>
+      <ul class="nets" id="nets"></ul>
+    </div>
   </div>
+
+  <div class="wifi-state" id="state" hidden><span class="pulse"></span><span id="state-text"></span></div>
+  <div class="wifi-buttons"><button class="btn ghost big" id="close">Sluiten</button></div>
 </section>
 <script src="wifi.js"></script>
 </body>

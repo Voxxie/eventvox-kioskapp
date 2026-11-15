@@ -126,17 +126,22 @@ wifi_lockdown=false        # true: gebruikers kunnen deze netwerken niet wijzige
   het toestel; de app heeft de instellingen dan al opgeslagen. Zet het bestand niet met echte wachtwoorden in Git.
 - Status: beheermenu > Overige instellingen > Wifi-instellingen toont welke profielen de app heeft gezet.
 
-### Wifi toevoegen met een QR-code
-Heeft het toestel 30 seconden geen netwerk, dan toont de app bovenaan: *Geen netwerk · scan een wifi-QR-code om een
-netwerk toe te voegen*. De balk blokkeert niets: de scanterminal blijft offline scannen. Een gescande wifi-QR-code
-(`WIFI:T:WPA;S:naam;P:wachtwoord;;`, het standaardformaat) opent een bevestiging met de netwerknaam; *Toevoegen en
-verbinden* voegt het netwerk toe en verbindt (tot 60 s). Lukt dat niet, dan blijft het netwerk bewaard en blijven de
-andere netwerken gewoon werken.
+### Netwerk toevoegen (zonder netwerk)
+Heeft het toestel 30 seconden geen netwerk, dan staat bovenaan **Je bent offline** met de knop **Netwerk toevoegen**.
+De balk blokkeert niets (alleen de knop reageert): de scanterminal blijft offline scannen. De knop opent een scherm met:
+- **Wifi-QR-code**: scan een code (`WIFI:T:WPA;S:naam;P:wachtwoord;;`, het standaardformaat); je ziet naam en
+  beveiliging en kiest *Toevoegen en verbinden*.
+- **Netwerken in de buurt**: met signaalsterkte, slotje en *opgeslagen*/*verbonden*; tik op een netwerk, vul zo nodig het
+  wachtwoord in en kies *Verbinden* (een opgeslagen netwerk kan zonder wachtwoord). Android geeft deze lijst alleen met
+  locatie aan: de app zet die als device owner zelf aan, anders staat er uitleg.
+Verbinden duurt tot 60 s; lukt het niet, dan zegt het scherm dat en blijven de andere netwerken gewoon werken. Hetzelfde
+scherm staat in het beheerscherm (Wifi > *Netwerk toevoegen*), ook als het toestel online is. Een wifi-QR-code zonder
+het scherm open opent het ook (alleen offline).
 - Wifi-codes gaan nooit naar de website. Met netwerk doet een wifi-code niets, behalve in het beheerscherm: daar wordt
   een gescande wifi-code meteen toegevoegd (Wifi-kaart).
 - Een code maken: in EventVOX bij Terminals de knop *Wifi-QR-code* (het wachtwoord blijft in de browser), met een
   QR-generator, of een Android-telefoon (Instellingen > Wifi > Delen).
-- Via QR toegevoegde netwerken worden niet weggehaald door `wifi_remove_others` of de profielen uit `webkiosk.properties`.
+- Netwerken die via dit scherm of een QR-code zijn toegevoegd, worden niet weggehaald door `wifi_remove_others` of de profielen uit `webkiosk.properties`.
 - Werkt met DataWedge via de app (standaard) én als toetsaanslagen (DataWedge met eigen profielen, een USB- of
   Bluetooth-scanner): toetsen die met `WIFI:` beginnen worden even vastgehouden en niet naar de website gestuurd; is het
   toch geen wifi-code, dan gaan ze alsnog door. Na een pauze van meer dan 0,1 s gaat alles direct door (een mens typt

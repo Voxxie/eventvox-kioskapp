@@ -155,6 +155,46 @@ public class WifiProfiles {
         return id;
     }
 
+    /** Met een al opgeslagen netwerk verbinden (zonder wachtwoord); geeft het networkId, of -1 als het er niet is. */
+    @SuppressWarnings("deprecation")
+    public static int connectSaved(Context c, String ssid) {
+        WifiManager wm = (WifiManager) c.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        if (wm == null) return -1;
+        if (!wm.isWifiEnabled()) wm.setWifiEnabled(true);
+        try {
+            List<WifiConfiguration> configured = wm.getConfiguredNetworks();
+            if (configured != null) for (WifiConfiguration x : configured) {
+                if (ssid.equals(unquote(x.SSID))) {
+                    wm.enableNetwork(x.networkId, true);
+                    wm.reconnect();
+                    return x.networkId;
+                }
+            }
+        } catch (Exception ignored) {}
+        return -1;
+    }
+
+    /** De namen van de opgeslagen netwerken */
+    @SuppressWarnings("deprecation")
+    public static Set<String> savedSsids(Context c) {
+        Set<String> out = new HashSet<>();
+        WifiManager wm = (WifiManager) c.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        try {
+            List<WifiConfiguration> configured = wm == null ? null : wm.getConfiguredNetworks();
+            if (configured != null) for (WifiConfiguration x : configured) if (x.SSID != null) out.add(unquote(x.SSID));
+        } catch (Exception ignored) {}
+        return out;
+    }
+
+    /** De beveiliging uit de capabilities van een scanresultaat: WPA, WEP, OPEN of EAP (bedrijfsnetwerk, niet ondersteund) */
+    public static String securityOf(String capabilities) {
+        String cap = capabilities == null ? "" : capabilities.toUpperCase(Locale.ROOT);
+        if (cap.contains("EAP")) return "EAP";
+        if (cap.contains("PSK") || cap.contains("SAE") || cap.contains("WPA")) return "WPA";
+        if (cap.contains("WEP")) return "WEP";
+        return "OPEN";
+    }
+
     /** Alle opgeslagen netwerken weer aan (na addAndConnect, of het nu lukte of niet) */
     @SuppressWarnings("deprecation")
     public static void enableAll(Context c) {

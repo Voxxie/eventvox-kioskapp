@@ -578,7 +578,7 @@ public class MainActivity extends Activity {
 
     @Override public void onBackPressed() {
         if (adminView != null) { adminEmit("back", new JSONObject()); return; }
-        if (wifiView != null) { handler.removeCallbacks(wifiWait); hideWifiView(); return; }
+        if (wifiView != null) { hideWifiView(); return; }
         if (web.canGoBack()) web.goBack();
         // anders: niets doen, app kan niet via terug-knop worden verlaten
     }
@@ -775,9 +775,9 @@ public class MainActivity extends Activity {
         }
     };
 
-    // ---------- wifi via QR-code (assets/wifi.html) ----------
+    // ---------- netwerk toevoegen (assets/wifi.html): wifi-QR-code of een netwerk in de buurt ----------
 
-    /** wifi_qr=false: wifi-QR-codes negeren */
+    /** wifi_qr=false: geen offline-balk en wifi-QR-codes negeren */
     private boolean wifiQrEnabled() { return prefs.getBoolean("wifi_qr", true); }
 
     private boolean isOnline() {
@@ -788,13 +788,15 @@ public class MainActivity extends Activity {
 
     private static final long OFFLINE_BANNER_MS = 30000;
     private long offlineSince = 0;
-    private TextView offlineBanner;
+    private View offlineBanner;
     private WebView wifiView;
     private WifiProfiles.Profile pendingWifi;
+    private String wifiTrySsid = "";
     private int wifiTryId = -1;
     private long wifiTryUntil = 0;
+    private boolean wifiScanRegistered = false;
 
-    /** Elke 5 s: na 30 s zonder netwerk een balk bovenaan (raakt de pagina niet: tikken gaan erdoorheen) */
+    /** Elke 5 s: na 30 s zonder netwerk een balk bovenaan; alleen de knop vangt tikken, de pagina blijft bruikbaar */
     private final Runnable offlineCheck = new Runnable() {
         public void run() {
             handler.postDelayed(this, 5000);
@@ -802,39 +804,64 @@ public class MainActivity extends Activity {
             long now = SystemClock.uptimeMillis();
             if (online) offlineSince = 0;
             else if (offlineSince == 0) offlineSince = now;
-            boolean show = !online && wifiQrEnabled() && now - offlineSince >= OFFLINE_BANNER_MS && wifiView == null;
-            if (show && offlineBanner == null) {
-                offlineBanner = new TextView(MainActivity.this);
-                offlineBanner.setText("Geen netwerk · scan een wifi-QR-code om een netwerk toe te voegen");
-                offlineBanner.setTextColor(Color.WHITE);
-                offlineBanner.setTextSize(15);
-                offlineBanner.setGravity(Gravity.CENTER);
-                int pad = Math.round(12 * getResources().getDisplayMetrics().density);
-                offlineBanner.setPadding(pad, pad, pad, pad);
-                offlineBanner.setBackgroundColor(Color.parseColor("#E65E2572"));
-                offlineBanner.setClickable(false);
-                offlineBanner.setFocusable(false);
-                root.addView(offlineBanner, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP));
-            } else if (!show && offlineBanner != null) {
-                root.removeView(offlineBanner);
-                offlineBanner = null;
-            }
+            boolean show = !online && wifiQrEnabled() && now - offlineSince >= OFFLINE_BANNER_MS && wifiView == null && adminView == null;
+            if (show && offlineBanner == null) showOfflineBanner();
+            else if (!show && offlineBanner != null) { root.removeView(offlineBanner); offlineBanner = null; }
         }
     };
 
+    private void showOfflineBanner() {
+        float dp = getResources().getDisplayMetrics().density;
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setBackgroundColor(Color.parseColor("#F25E2572"));
+        int pad = Math.round(10 * dp);
+        bar.setPadding(Math.round(16 * dp), pad, Math.round(10 * dp), pad);
+        TextView text = new TextView(this);
+        text.setText("Je bent offline");
+        text.setTextColor(Color.WHITE);
+        text.setTextSize(16);
+        text.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        bar.addView(text, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        TextView button = new TextView(this);
+        button.setText("Netwerk toevoegen");
+        button.setTextColor(Color.parseColor("#5e2572"));
+        button.setTextSize(15);
+        button.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        button.setPadding(Math.round(14 * dp), Math.round(8 * dp), Math.round(14 * dp), Math.round(8 * dp));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(Color.WHITE);
+        bg.setCornerRadius(10 * dp);
+        button.setBackground(bg);
+        button.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { pendingWifi = null; showWifiView(); }
+        });
+        bar.addView(button);
+        // De balk zelf laat tikken door (niet clickable); alleen de knop reageert
+        bar.setClickable(false);
+        offlineBanner = bar;
+        root.addView(bar, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP));
+    }
+
     /**
-     * Een gescande wifi-QR-code: in het beheerscherm meteen toevoegen; zonder netwerk een bevestigingsscherm;
-     * met netwerk niets (toevoegen kan dan via het beheerscherm), zodat een vreemde QR-code een werkend toestel
-     * niet naar een ander netwerk kan sturen.
+     * Een gescande wifi-QR-code: met het netwerkscherm open daar tonen; in het beheerscherm meteen toevoegen; zonder
+     * netwerk het netwerkscherm openen; met netwerk niets (een vreemde code mag een werkend toestel niet omzetten).
      */
     private void handleWifiQr(String data) {
         if (!wifiQrEnabled()) return;
         WifiProfiles.Profile w = WifiProfiles.parseQr(data);
+        if (wifiView != null) {
+            if (w == null) { wifiEmit("failed", "Geen geldige wifi-QR-code"); return; }
+            pendingWifi = w;
+            wifiView.evaluateJavascript("window.wifiEvent&&window.wifiEvent({type:'qr',qr:" + qrJson(w) + "})", null);
+            return;
+        }
         if (adminView != null) {
             if (w == null) { adminToast("Geen geldige wifi-QR-code"); return; }
             pendingWifi = w;
-            startWifiTry(true);
+            tryProfile(w, true);
             return;
         }
         if (w == null) { toast("Geen geldige wifi-QR-code"); return; }
@@ -843,8 +870,19 @@ public class MainActivity extends Activity {
         showWifiView();
     }
 
+    private static JSONObject qrJson(WifiProfiles.Profile w) {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("ssid", w.ssid);
+            o.put("security", w.security.equals("OPEN") ? "Open (geen wachtwoord)" : w.security.equals("WEP") ? "WEP" : "WPA/WPA2");
+            o.put("hidden", w.hidden);
+        } catch (Exception ignored) {}
+        return o;
+    }
+
     private void showWifiView() {
-        if (wifiView != null) { wifiView.reload(); return; }
+        if (wifiView != null) return;
+        if (offlineBanner != null) { root.removeView(offlineBanner); offlineBanner = null; }
         wifiView = new WebView(this);
         wifiView.setBackgroundColor(Color.parseColor("#5e2572"));
         wifiView.getSettings().setJavaScriptEnabled(true);
@@ -854,11 +892,15 @@ public class MainActivity extends Activity {
         });
         wifiView.addJavascriptInterface(new WifiBridge(), "WifiQr");
         wifiView.loadUrl("file:///android_asset/wifi.html");
-        if (offlineBanner != null) { root.removeView(offlineBanner); offlineBanner = null; }
         root.addView(wifiView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        IntentFilter f = new IntentFilter(android.net.wifi.WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
+        registerReceiver(wifiScanReceiver, f);
+        wifiScanRegistered = true;
     }
 
     private void hideWifiView() {
+        handler.removeCallbacks(wifiWait);
+        if (wifiScanRegistered) { try { unregisterReceiver(wifiScanReceiver); } catch (Exception ignored) {} wifiScanRegistered = false; }
         if (wifiView == null) return;
         root.removeView(wifiView);
         wifiView.destroy();
@@ -870,7 +912,7 @@ public class MainActivity extends Activity {
 
     private void wifiEmit(String state, String text) {
         JSONObject d = new JSONObject();
-        try { d.put("state", state); d.put("text", text); } catch (Exception ignored) {}
+        try { d.put("type", "status"); d.put("state", state); d.put("text", text); } catch (Exception ignored) {}
         if (wifiView != null) wifiView.evaluateJavascript("window.wifiEvent&&window.wifiEvent(" + d + ")", null);
         if (adminView != null) {
             if (!"connecting".equals(state)) adminToast(text);
@@ -878,18 +920,93 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Netwerk toevoegen en tot 60 s wachten op verbinding; daarna de andere netwerken weer aan */
-    private void startWifiTry(boolean fromAdmin) {
-        final WifiProfiles.Profile w = pendingWifi;
-        if (w == null) return;
+    // --- netwerken in de buurt ---
+
+    private final BroadcastReceiver wifiScanReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) { emitNetworks(); }
+    };
+
+    /** Locatie aan (als device owner): zonder locatie geeft Android 8 geen netwerken in de buurt */
+    @SuppressWarnings("deprecation")
+    private boolean locationOn() {
+        try {
+            int mode = Settings.Secure.getInt(getContentResolver(), Settings.Secure.LOCATION_MODE, 0);
+            if (mode != Settings.Secure.LOCATION_MODE_OFF) return true;
+            if (isOwner()) {
+                dpm.setSecureSetting(admin, Settings.Secure.LOCATION_MODE, String.valueOf(Settings.Secure.LOCATION_MODE_BATTERY_SAVING));
+                return Settings.Secure.getInt(getContentResolver(), Settings.Secure.LOCATION_MODE, 0) != Settings.Secure.LOCATION_MODE_OFF;
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private void startNetworkScan() {
+        android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+        if (wm == null) return;
+        if (!wm.isWifiEnabled()) wm.setWifiEnabled(true);
+        locationOn();
+        try { wm.startScan(); } catch (Exception ignored) {}
+        emitNetworks(); // wat er al bekend is, meteen
+    }
+
+    @SuppressWarnings("deprecation")
+    private void emitNetworks() {
+        if (wifiView == null) return;
+        JSONObject d = new JSONObject();
+        try {
+            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+            java.util.Set<String> saved = WifiProfiles.savedSsids(this);
+            android.net.wifi.WifiInfo info = wm == null ? null : wm.getConnectionInfo();
+            String current = info == null || info.getSSID() == null ? "" : info.getSSID().replaceAll("^\"|\"$", "");
+            java.util.Map<String, android.net.wifi.ScanResult> best = new java.util.LinkedHashMap<>();
+            java.util.List<android.net.wifi.ScanResult> results = wm == null ? null : wm.getScanResults();
+            if (results != null) for (android.net.wifi.ScanResult r : results) {
+                if (r.SSID == null || r.SSID.trim().isEmpty()) continue;
+                android.net.wifi.ScanResult b = best.get(r.SSID);
+                if (b == null || r.level > b.level) best.put(r.SSID, r);
+            }
+            java.util.List<android.net.wifi.ScanResult> sorted = new java.util.ArrayList<>(best.values());
+            java.util.Collections.sort(sorted, new java.util.Comparator<android.net.wifi.ScanResult>() {
+                public int compare(android.net.wifi.ScanResult a, android.net.wifi.ScanResult b) { return b.level - a.level; }
+            });
+            JSONArray list = new JSONArray();
+            for (android.net.wifi.ScanResult r : sorted) {
+                JSONObject n = new JSONObject();
+                n.put("ssid", r.SSID);
+                n.put("security", WifiProfiles.securityOf(r.capabilities));
+                n.put("level", android.net.wifi.WifiManager.calculateSignalLevel(r.level, 5));
+                n.put("rssi", r.level);
+                n.put("band", r.frequency >= 5000 ? "5 GHz" : "2,4 GHz");
+                n.put("saved", saved.contains(r.SSID));
+                n.put("current", r.SSID.equals(current) && isOnline());
+                list.put(n);
+            }
+            d.put("type", "networks");
+            d.put("list", list);
+            d.put("location", Settings.Secure.getInt(getContentResolver(), Settings.Secure.LOCATION_MODE, 0) != Settings.Secure.LOCATION_MODE_OFF);
+        } catch (Exception e) {
+            try { d.put("type", "networks"); d.put("list", new JSONArray()); d.put("error", String.valueOf(e.getMessage())); } catch (Exception ignored) {}
+        }
+        wifiView.evaluateJavascript("window.wifiEvent&&window.wifiEvent(" + d + ")", null);
+    }
+
+    // --- verbinden ---
+
+    /** Een profiel toevoegen (QR-code of gekozen netwerk met wachtwoord) en tot 60 s wachten op verbinding */
+    private void tryProfile(WifiProfiles.Profile w, boolean fromAdmin) {
         int id = WifiProfiles.addAndConnect(this, w);
         if (id == -1) { wifiEmit("failed", "Toevoegen van " + w.ssid + " lukte niet"); return; }
-        java.util.Set<String> qr = new java.util.HashSet<>(prefs.getStringSet("wifi_qr_ssids", new java.util.HashSet<String>()));
-        qr.add(w.ssid);
-        prefs.edit().putStringSet("wifi_qr_ssids", qr).apply();
+        java.util.Set<String> kept = new java.util.HashSet<>(prefs.getStringSet("wifi_qr_ssids", new java.util.HashSet<String>()));
+        kept.add(w.ssid);
+        prefs.edit().putStringSet("wifi_qr_ssids", kept).apply();
+        waitFor(id, w.ssid, (fromAdmin ? w.ssid + " toegevoegd, " : "") + "verbinden met " + w.ssid + "…");
+    }
+
+    private void waitFor(int id, String ssid, String text) {
         wifiTryId = id;
+        wifiTrySsid = ssid;
         wifiTryUntil = SystemClock.uptimeMillis() + 60000;
-        wifiEmit("connecting", (fromAdmin ? w.ssid + " toegevoegd, " : "") + "verbinden met " + w.ssid + "…");
+        wifiEmit("connecting", text);
         handler.removeCallbacks(wifiWait);
         handler.postDelayed(wifiWait, 1000);
     }
@@ -899,17 +1016,16 @@ public class MainActivity extends Activity {
         public void run() {
             android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
             android.net.wifi.WifiInfo info = wm == null ? null : wm.getConnectionInfo();
-            String ssid = pendingWifi != null ? pendingWifi.ssid : "het netwerk";
             boolean ok = info != null && info.getNetworkId() == wifiTryId && isOnline();
             if (ok) {
                 WifiProfiles.enableAll(MainActivity.this);
-                wifiEmit("connected", "Verbonden met " + ssid);
+                wifiEmit("connected", "Verbonden met " + wifiTrySsid);
                 if (wifiView != null) handler.postDelayed(new Runnable() { public void run() { hideWifiView(); loadHome(); } }, 2500);
                 return;
             }
             if (SystemClock.uptimeMillis() > wifiTryUntil) {
                 WifiProfiles.enableAll(MainActivity.this);
-                wifiEmit("failed", "Geen verbinding met " + ssid + " binnen 60 s. Het netwerk is bewaard; klopt het wachtwoord en is het in de buurt?");
+                wifiEmit("failed", "Geen verbinding met " + wifiTrySsid + " binnen 60 s. Klopt het wachtwoord en is het netwerk in de buurt?");
                 return;
             }
             handler.postDelayed(this, 1000);
@@ -918,20 +1034,43 @@ public class MainActivity extends Activity {
 
     /** Wordt door wifi.html aangeroepen */
     private class WifiBridge {
+        /** { qr: { ssid, security, hidden } of null, offline } */
         @JavascriptInterface public String info() {
             JSONObject o = new JSONObject();
-            WifiProfiles.Profile w = pendingWifi;
             try {
-                if (w != null) {
-                    o.put("ssid", w.ssid);
-                    o.put("security", w.security.equals("OPEN") ? "Open (geen wachtwoord)" : w.security.equals("WEP") ? "WEP" : "WPA/WPA2");
-                    o.put("hidden", w.hidden);
-                }
+                o.put("qr", pendingWifi == null ? JSONObject.NULL : qrJson(pendingWifi));
+                o.put("offline", !isOnline());
             } catch (Exception ignored) {}
             return o.toString();
         }
-        @JavascriptInterface public void add() { runOnUiThread(new Runnable() { public void run() { startWifiTry(false); } }); }
-        @JavascriptInterface public void close() { runOnUiThread(new Runnable() { public void run() { handler.removeCallbacks(wifiWait); hideWifiView(); } }); }
+        @JavascriptInterface public void scan() { runOnUiThread(new Runnable() { public void run() { startNetworkScan(); } }); }
+        /** De gescande wifi-QR-code toevoegen */
+        @JavascriptInterface public void add() {
+            runOnUiThread(new Runnable() { public void run() { if (pendingWifi != null) tryProfile(pendingWifi, false); } });
+        }
+        /** Een netwerk uit de lijst: opgeslagen en zonder wachtwoord verbinden, anders toevoegen met het wachtwoord */
+        @JavascriptInterface public void connect(final String ssid, final String security, final String password) {
+            runOnUiThread(new Runnable() { public void run() {
+                if (ssid == null || ssid.isEmpty()) return;
+                if ("EAP".equals(security)) { wifiEmit("failed", "Bedrijfsnetwerken (met gebruikersnaam) worden niet ondersteund"); return; }
+                if ((password == null || password.isEmpty()) && WifiProfiles.savedSsids(MainActivity.this).contains(ssid)) {
+                    int id = WifiProfiles.connectSaved(MainActivity.this, ssid);
+                    if (id == -1) { wifiEmit("failed", "Verbinden met " + ssid + " lukte niet"); return; }
+                    waitFor(id, ssid, "Verbinden met " + ssid + "…");
+                    return;
+                }
+                WifiProfiles.Profile w = new WifiProfiles.Profile();
+                w.ssid = ssid;
+                w.password = password == null ? "" : password;
+                w.security = "OPEN".equals(security) ? "OPEN" : "WEP".equals(security) ? "WEP" : "WPA";
+                if (w.security.equals("WPA") && (w.password.length() < 8 || w.password.length() > 63)) {
+                    wifiEmit("failed", "Een WPA-wachtwoord heeft 8 tot 63 tekens");
+                    return;
+                }
+                tryProfile(w, false);
+            }});
+        }
+        @JavascriptInterface public void close() { runOnUiThread(new Runnable() { public void run() { hideWifiView(); } }); }
     }
 
     // ---------- trillen ----------
@@ -1551,6 +1690,7 @@ public class MainActivity extends Activity {
     private void adminAction(String name, String arg) {
         switch (name) {
             case "close": hideAdmin(); break;
+            case "networks": hideAdmin(); pendingWifi = null; showWifiView(); break;
             case "vibrateTest":
                 // de patronen van de scanterminal: toegelaten, waarschuwing, geweigerd
                 String pat = "warning".equals(arg) ? "[90,110,90]" : "error".equals(arg) ? "[350,150,350,150,350]" : "[70]";
