@@ -141,7 +141,7 @@ in), dan vervalt de kopie. Verander die sleutelnaam nooit zonder de frontend mee
   anders in volgorde doorgestuurd.
 - NFC na slaapstand: reader mode opnieuw bij scherm aan, ontgrendelen, focus en NFC aan (+ tweede poging na 1,5 s).
 - Crash van de pagina (`onRenderProcessGone`): nieuwe WebView; 3× binnen een minuut: 30 s wachten.
-- Nachtelijk herladen (standaard 04:00–07:00, alleen na 5 min rust), volume vast (80%, volumeknoppen afgevangen in
+- Nachtelijk herladen (standaard 04:00–07:00, alleen na 5 min rust), volume vast (standaard uit; aan: volumeknoppen afgevangen in
   `dispatchKeyEvent` en elke volumewijziging teruggezet; **nooit** `DISALLOW_ADJUST_VOLUME`: dat dempt het hoofdvolume),
   dimmen (alleen met "scherm altijd aan", na 2 min naar 15%).
 - Meldingen bovenaan (`bannerBox`, tikken gaan erdoor): accu bijna leeg (`low_battery`, 15%), klok wijkt > 2 min af

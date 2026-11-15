@@ -1240,7 +1240,7 @@ public class MainActivity extends Activity {
     // ---------- volume vast ----------
 
     /*
-     * volume_lock: percentage (standaard 80, 0 = uit) voor het geluid van de pagina (STREAM_MUSIC: Web Audio, de piep
+     * volume_lock: percentage (standaard 0 = uit: de volumeknoppen werken) voor het geluid van de pagina (STREAM_MUSIC: Web Audio, de piep
      * van de scanterminal). De volumeknoppen vangt dispatchKeyEvent af; verandert het volume toch (een andere app, de
      * instellingen), dan zet volumeReceiver het terug.
      * Nooit UserManager.DISALLOW_ADJUST_VOLUME gebruiken: die zet het hoofdvolume op stil ("the master volume will be
@@ -1248,7 +1248,7 @@ public class MainActivity extends Activity {
      */
     @SuppressWarnings("deprecation")
     private void applyVolume() {
-        int pct = prefs.getInt("volume_lock", 80);
+        int pct = prefs.getInt("volume_lock", 0);
         try {
             if (isOwner()) {
                 dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_ADJUST_VOLUME);
@@ -1277,7 +1277,7 @@ public class MainActivity extends Activity {
     };
     private final Runnable volumeRestore = new Runnable() { public void run() { applyVolume(); } };
 
-    private boolean volumeLocked() { return prefs.getInt("volume_lock", 80) > 0; }
+    private boolean volumeLocked() { return prefs.getInt("volume_lock", 0) > 0; }
 
     // ---------- scherm dimmen ----------
 
@@ -2257,7 +2257,7 @@ public class MainActivity extends Activity {
         st.put("ignore_ssl_errors", prefs.getBoolean("ignore_ssl_errors", false));
         st.put("vibrate", prefs.getBoolean("vibrate", true));
         st.put("update_channel", prefs.getString("update_channel", "stable"));
-        st.put("volume_lock", prefs.getInt("volume_lock", 80));
+        st.put("volume_lock", prefs.getInt("volume_lock", 0));
         st.put("dim_minutes", prefs.getInt("dim_minutes", 2));
         st.put("dim_level", prefs.getInt("dim_level", 15));
         st.put("nightly_reload", prefs.getBoolean("nightly_reload", true));

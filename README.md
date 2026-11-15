@@ -231,7 +231,8 @@ interval, en het update-adres. In `webkiosk.properties`: `auto_update`, `update_
   terminal aan. Wordt de terminal in EventVOX ingetrokken, dan vervalt de kopie en koppelt hij gewoon opnieuw.
 - **'s Nachts herladen** (`nightly_reload`, `nightly_hour`, standaard 04:00): één keer per nacht een verse pagina, alleen
   als het toestel 5 minuten niet gebruikt is.
-- **Volume vast** (`volume_lock`, standaard 80%): de piep van de scanterminal blijft hoorbaar; de volumeknoppen doen niets.
+- **Volume vast** (`volume_lock`, standaard uit): aan (bv. 80%) blijft de piep van de scanterminal altijd hoorbaar en doen
+  de volumeknoppen niets; uit werken de volumeknoppen gewoon.
 - **Dimmen** (`dim_minutes`, `dim_level`): met *scherm altijd aan* na 2 minuten zonder tik, scan of NFC naar 15%.
 - **Eigen PIN verplicht**: staat de PIN nog op 1234, dan vraagt het beheerscherm eerst een eigen PIN.
 - **Logboek en diagnose**: de app houdt de laatste 300 gebeurtenissen bij (start, crash, wifi, updates, fouten; geen
