@@ -978,11 +978,97 @@ public class MainActivity extends Activity {
         int k = e.getKeyCode();
         boolean system = k == KeyEvent.KEYCODE_BACK || k == KeyEvent.KEYCODE_HOME || k == KeyEvent.KEYCODE_VOLUME_UP
             || k == KeyEvent.KEYCODE_VOLUME_DOWN || k == KeyEvent.KEYCODE_POWER || k == KeyEvent.KEYCODE_APP_SWITCH;
-        if (!system && adminView == null && web != null && !web.hasFocus()) {
+        if (system) return super.dispatchKeyEvent(e);
+        if (wifiQrEnabled() && catchWifiKeys(e)) return true;
+        return routeKey(e);
+    }
+
+    /** Naar de website (ook als die de focus kwijt is), of naar het beheer- of wifi-scherm als dat open is */
+    private boolean routeKey(KeyEvent e) {
+        if (adminView == null && wifiView == null && web != null && !web.hasFocus()) {
             web.requestFocus();
             return web.dispatchKeyEvent(e);
         }
         return super.dispatchKeyEvent(e);
+    }
+
+    /*
+     * Een wifi-QR-code die als toetsaanslagen binnenkomt (DataWedge met eigen profielen, een USB- of Bluetooth-scanner):
+     * toetsen die het begin van "WIFI:" vormen, worden even vastgehouden. Is het een wifi-code (Enter, of een complete
+     * code en dan een pauze), dan gaat hij naar handleWifiQr en niet naar de website; anders gaan de vastgehouden toetsen
+     * alsnog, in dezelfde volgorde, door. Een scanner typt veel sneller dan een mens: na een pauze van meer dan
+     * WEDGE_GAP_MS gaat alles gewoon door, zodat iemand die zelf "wifi:" typt niets merkt.
+     */
+    private static final long WEDGE_GAP_MS = 100;
+    private final java.util.ArrayList<KeyEvent> heldKeys = new java.util.ArrayList<>();
+    private final StringBuilder heldText = new StringBuilder();
+    private long heldAt = 0;
+    private final Runnable heldTimeout = new Runnable() { public void run() { finishHeld(false); } };
+
+    private static boolean wifiPrefix(String text) {
+        String t = text.toUpperCase(java.util.Locale.ROOT);
+        return t.length() <= 5 ? "WIFI:".startsWith(t) : t.startsWith("WIFI:");
+    }
+
+    /** True als de toets is vastgehouden of als deel van een wifi-code is gebruikt */
+    private boolean catchWifiKeys(KeyEvent e) {
+        boolean holding = !heldKeys.isEmpty();
+        long now = SystemClock.uptimeMillis();
+        if (holding && now - heldAt > WEDGE_GAP_MS) { finishHeld(false); holding = !heldKeys.isEmpty(); }
+        int action = e.getAction();
+        if (action == KeyEvent.ACTION_UP || KeyEvent.isModifierKey(e.getKeyCode())) {
+            if (!holding) return false;
+            heldKeys.add(e); // hoort bij een vastgehouden toets (loslaten, shift)
+            return true;
+        }
+        if (action == KeyEvent.ACTION_MULTIPLE && e.getKeyCode() == KeyEvent.KEYCODE_UNKNOWN && e.getCharacters() != null) {
+            // Een reeks tekens in één keer ("tekens als events" in DataWedge)
+            return holdText(e, e.getCharacters(), holding, now);
+        }
+        if (action != KeyEvent.ACTION_DOWN) { if (holding) flushHeld(); return false; }
+        if (e.getKeyCode() == KeyEvent.KEYCODE_ENTER || e.getKeyCode() == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+            if (!holding) return false;
+            if (heldText.length() >= 5) { heldKeys.add(e); finishHeld(true); return true; }
+            flushHeld();
+            return false;
+        }
+        int ch = e.getUnicodeChar();
+        if (ch == 0) { if (holding) flushHeld(); return false; }
+        return holdText(e, String.valueOf((char) ch), holding, now);
+    }
+
+    private boolean holdText(KeyEvent e, String chars, boolean holding, long now) {
+        String next = heldText.toString() + chars;
+        if (!wifiPrefix(next)) { if (holding) flushHeld(); return false; }
+        heldKeys.add(e);
+        heldText.setLength(0);
+        heldText.append(next);
+        heldAt = now;
+        handler.removeCallbacks(heldTimeout);
+        handler.postDelayed(heldTimeout, WEDGE_GAP_MS);
+        return true;
+    }
+
+    /** enter: de scanner sloot af met Enter. Een (complete) wifi-code naar handleWifiQr, anders alles doorsturen. */
+    private void finishHeld(boolean enter) {
+        handler.removeCallbacks(heldTimeout);
+        String text = heldText.toString();
+        boolean wifi = text.length() > 5 && wifiPrefix(text) && (enter || WifiProfiles.parseQr(text) != null);
+        if (wifi) {
+            heldKeys.clear();
+            heldText.setLength(0);
+            handleWifiQr(text);
+        } else {
+            flushHeld();
+        }
+    }
+
+    private void flushHeld() {
+        handler.removeCallbacks(heldTimeout);
+        java.util.List<KeyEvent> keys = new java.util.ArrayList<>(heldKeys);
+        heldKeys.clear();
+        heldText.setLength(0);
+        for (KeyEvent k : keys) routeKey(k);
     }
 
     // ---------- scanner (DataWedge) ----------

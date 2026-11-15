@@ -137,7 +137,10 @@ andere netwerken gewoon werken.
 - Een code maken: in EventVOX bij Terminals de knop *Wifi-QR-code* (het wachtwoord blijft in de browser), met een
   QR-generator, of een Android-telefoon (Instellingen > Wifi > Delen).
 - Via QR toegevoegde netwerken worden niet weggehaald door `wifi_remove_others` of de profielen uit `webkiosk.properties`.
-- Werkt met de scanner via DataWedge (standaard: `datawedge=app`); `wifi_qr=false` zet het uit.
+- Werkt met DataWedge via de app (standaard) én als toetsaanslagen (DataWedge met eigen profielen, een USB- of
+  Bluetooth-scanner): toetsen die met `WIFI:` beginnen worden even vastgehouden en niet naar de website gestuurd; is het
+  toch geen wifi-code, dan gaan ze alsnog door. Na een pauze van meer dan 0,1 s gaat alles direct door (een mens typt
+  trager dan een scanner). `wifi_qr=false` zet het uit.
 
 ## Serienummer in de URL
 Standaard-URL: `https://eventvox.nl/scanterminal?serial={serial}`
