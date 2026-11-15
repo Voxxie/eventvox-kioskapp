@@ -56,6 +56,7 @@ public class MainActivity extends Activity {
         @Override public void onReceive(Context c, Intent i) {
             lastBattery = i;
             JSONObject b = batteryJson(i);
+            updateBatteryBanner(b);
             // alleen een event als er iets wezenlijks verandert (niet bij elke spanningswijziging)
             String sig = b.optInt("level") + "|" + b.optBoolean("charging") + "|" + b.optString("plugged") + "|" + b.optString("health");
             if (web != null && !sig.equals(lastBatterySig)) {
@@ -111,6 +112,13 @@ public class MainActivity extends Activity {
         root = new FrameLayout(this);
         root.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
+        // Meldingen bovenaan (accu, klok, offline): tikken gaan erdoorheen naar de pagina, behalve op een knop
+        bannerBox = new LinearLayout(this);
+        bannerBox.setOrientation(LinearLayout.VERTICAL);
+        root.addView(bannerBox, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP));
+        showSplash();
+        applyOrientation();
         web.setFocusable(true);
         web.setFocusableInTouchMode(true);
         web.requestFocus();
@@ -122,6 +130,7 @@ public class MainActivity extends Activity {
         handler.postDelayed(offlineCheck, 5000);
         handler.postDelayed(nightlyCheck, 60000);
         handler.postDelayed(dimCheck, 15000);
+        handler.postDelayed(clockCheck, 20000);
         KioskLog.add(this, "App gestart, versie " + appVersion() + (isOwner() ? "" : " (geen device owner)"));
     }
 
@@ -162,6 +171,7 @@ public class MainActivity extends Activity {
                 v.evaluateJavascript(BATTERY_POLYFILL + VIBRATE_POLYFILL, null);
                 focusWeb();
                 checkTerminalToken(v, url);
+                hideSplash();
             }
             /** Android 8+: het proces van de pagina is gecrasht of door Android gestopt (geheugen); niet de hele app */
             public boolean onRenderProcessGone(WebView v, android.webkit.RenderProcessGoneDetail detail) {
@@ -198,6 +208,18 @@ public class MainActivity extends Activity {
             @JavascriptInterface public String getStatus() { return statusJson().toString(); }
             /** EventVOX vraagt een diagnose: het logboek gaat mee met de volgende getStatus() */
             @JavascriptInterface public void requestDiagnostics() { diagnosticsPending = true; KioskLog.add(MainActivity.this, "Diagnose gevraagd door EventVOX"); }
+            /** Een opdracht uit EventVOX ({ id, command }); elke id één keer (ook na een herstart) */
+            @JavascriptInterface public void command(final String json) { runOnUiThread(new Runnable() { public void run() { runCommand(json); } }); }
+            /** Instellingen uit EventVOX ({ version, values }); elke versie één keer */
+            @JavascriptInterface public void applySettings(final String json) { runOnUiThread(new Runnable() { public void run() { applyRemoteSettings(json); } }); }
+            /** De sleutel van beheer-QR-codes van de organisatie (64 hex), versleuteld bewaard */
+            @JavascriptInterface public void setAdminKey(String hex) {
+                if (hex == null || !hex.matches("[0-9a-f]{64}")) return;
+                if (!hex.equals(TokenVault.get(prefs, "admin_qr_key"))) {
+                    TokenVault.put(prefs, "admin_qr_key", hex);
+                    KioskLog.add(MainActivity.this, "Sleutel voor beheer-QR-codes ontvangen");
+                }
+            }
             @JavascriptInterface public String getDeviceInfo() {
                 JSONObject o = new JSONObject();
                 try {
@@ -263,7 +285,9 @@ public class MainActivity extends Activity {
             }
             String ch = p.getProperty("update_channel");
             if (ch != null && !ch.trim().isEmpty()) e.putString("update_channel", ch.trim().toLowerCase());
-            for (String key : new String[]{"nfc_refresh_seconds", "nfc_debounce_ms", "update_check_hours", "volume_lock", "dim_minutes", "dim_level", "nightly_hour"}) {
+            String or = p.getProperty("orientation");
+            if (or != null && or.trim().matches("portrait|landscape|auto")) e.putString("orientation", or.trim());
+            for (String key : new String[]{"nfc_refresh_seconds", "nfc_debounce_ms", "update_check_hours", "volume_lock", "dim_minutes", "dim_level", "nightly_hour", "low_battery"}) {
                 String v = p.getProperty(key);
                 if (v != null) try { e.putInt(key, Integer.parseInt(v.trim())); } catch (NumberFormatException ignored) {}
             }
@@ -572,6 +596,7 @@ public class MainActivity extends Activity {
         resumed = true;
         focusWeb();
         applyVolume();
+        if (isOwner()) try { dpm.setAutoTimeRequired(admin, true); } catch (Exception ignored) {}
         hideSystemUi();
         enterKiosk();
         restartNfc("onResume");
@@ -837,7 +862,7 @@ public class MainActivity extends Activity {
             else if (offlineSince == 0) offlineSince = now;
             boolean show = !online && wifiQrEnabled() && now - offlineSince >= OFFLINE_BANNER_MS && wifiView == null && adminView == null;
             if (show && offlineBanner == null) showOfflineBanner();
-            else if (!show && offlineBanner != null) { root.removeView(offlineBanner); offlineBanner = null; }
+            else if (!show && offlineBanner != null) { bannerBox.removeView(offlineBanner); offlineBanner = null; }
         }
     };
 
@@ -872,8 +897,7 @@ public class MainActivity extends Activity {
         // De balk zelf laat tikken door (niet clickable); alleen de knop reageert
         bar.setClickable(false);
         offlineBanner = bar;
-        root.addView(bar, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP));
+        bannerBox.addView(bar);
     }
 
     /**
@@ -913,7 +937,7 @@ public class MainActivity extends Activity {
 
     private void showWifiView() {
         if (wifiView != null) return;
-        if (offlineBanner != null) { root.removeView(offlineBanner); offlineBanner = null; }
+        if (offlineBanner != null) { bannerBox.removeView(offlineBanner); offlineBanner = null; }
         wifiView = new WebView(this);
         wifiView.setBackgroundColor(Color.parseColor("#5e2572"));
         wifiView.getSettings().setJavaScriptEnabled(true);
@@ -1126,6 +1150,7 @@ public class MainActivity extends Activity {
         int index = old != null ? root.indexOfChild(old) : 0;
         if (old != null) { root.removeView(old); try { old.destroy(); } catch (Exception ignored) {} }
         root.addView(web, Math.max(0, index), new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        showSplash();
         focusWeb();
         // Drie crashes binnen een minuut: even wachten, anders blijft het rondgaan
         if (crash && recentCrashes.size() >= 3) {
@@ -1250,7 +1275,7 @@ public class MainActivity extends Activity {
         public void run() {
             handler.postDelayed(this, 15000);
             int minutes = prefs.getInt("dim_minutes", 2);
-            boolean want = prefs.getBoolean("keep_screen_on", false) && minutes > 0 && adminView == null && wifiView == null
+            boolean want = prefs.getBoolean("keep_screen_on", false) && minutes > 0 && adminView == null && wifiView == null && locateView == null
                 && SystemClock.uptimeMillis() - lastActivity > minutes * 60000L;
             if (want && !dimmed) setBrightness(Math.max(1, Math.min(100, prefs.getInt("dim_level", 15))) / 100f);
             else if (!want && dimmed) setBrightness(-1f);
@@ -1277,6 +1302,10 @@ public class MainActivity extends Activity {
             o.put("crashes", renderCrashes);
             if (lastCrashAt > 0) o.put("last_crash_at", iso(lastCrashAt));
             o.put("nfc_restarts", nfcRestarts);
+            if (clockCheckedAt > 0) o.put("clock_skew_s", clockSkew);
+            o.put("settings_version", prefs.getInt("remote_settings_version", 0));
+            o.put("command_done", prefs.getInt("last_command_id", 0));
+            o.put("orientation", prefs.getString("orientation", "portrait"));
             JSONObject w = wifiJson();
             w.remove("enabled");
             o.put("wifi", w);
@@ -1292,6 +1321,308 @@ public class MainActivity extends Activity {
             }
         } catch (Exception ignored) {}
         return o;
+    }
+
+    // ---------- meldingen bovenaan: accu en klok ----------
+
+    private LinearLayout bannerBox;
+    private TextView batteryBanner, clockBanner;
+
+    private TextView banner(String text, String color) {
+        TextView t = new TextView(this);
+        float dp = getResources().getDisplayMetrics().density;
+        t.setText(text);
+        t.setTextColor(Color.WHITE);
+        t.setTextSize(15);
+        t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        t.setGravity(Gravity.CENTER);
+        t.setPadding(Math.round(12 * dp), Math.round(10 * dp), Math.round(12 * dp), Math.round(10 * dp));
+        t.setBackgroundColor(Color.parseColor(color));
+        t.setClickable(false);
+        return t;
+    }
+
+    /** low_battery (standaard 15%, 0 = uit): onder dat percentage en niet aan de lader een rode balk */
+    private void updateBatteryBanner(JSONObject b) {
+        int limit = prefs.getInt("low_battery", 15);
+        int level = b.optInt("level", 100);
+        boolean show = limit > 0 && !b.optBoolean("charging") && level <= limit && bannerBox != null;
+        if (show) {
+            String text = "Accu bijna leeg (" + level + "%) · leg me aan de lader";
+            if (batteryBanner == null) {
+                batteryBanner = banner(text, "#F2C62828");
+                bannerBox.addView(batteryBanner, 0);
+                KioskLog.add(this, "Accu bijna leeg: " + level + "%");
+            } else batteryBanner.setText(text);
+        } else if (batteryBanner != null) {
+            bannerBox.removeView(batteryBanner);
+            batteryBanner = null;
+        }
+    }
+
+    // ---------- klokcontrole ----------
+
+    /*
+     * De scanterminal beoordeelt offline scans op de klok van het toestel. Als device owner moet Android de automatische
+     * tijd aanhouden (setAutoTimeRequired); daarnaast vergelijkt de app elke 15 minuten de klok met de Date-header van de
+     * server van de website. Meer dan CLOCK_WARN_S verschil: een balk, een regel in het logboek en clock_skew_s naar EventVOX.
+     */
+    private static final int CLOCK_WARN_S = 120;
+    private volatile int clockSkew = 0;
+    private volatile long clockCheckedAt = 0;
+
+    private static String skewText(int skew) {
+        int min = Math.round(Math.abs(skew) / 60f);
+        String amount = min >= 120 ? Math.round(min / 60f) + " uur" : Math.max(1, min) + " min";
+        return "loopt " + amount + (skew > 0 ? " voor" : " achter");
+    }
+
+    private final Runnable clockCheck = new Runnable() {
+        public void run() {
+            handler.postDelayed(this, 15 * 60000L);
+            final String url = resolvedUrl();
+            if (!url.startsWith("http") || !isOnline()) return;
+            new Thread(new Runnable() { public void run() {
+                try {
+                    java.net.HttpURLConnection con = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                    con.setRequestMethod("HEAD");
+                    con.setConnectTimeout(10000);
+                    con.setReadTimeout(10000);
+                    con.setUseCaches(false);
+                    long before = System.currentTimeMillis();
+                    con.getResponseCode();
+                    long after = System.currentTimeMillis();
+                    long server = con.getHeaderFieldDate("Date", 0);
+                    con.disconnect();
+                    if (server <= 0) return;
+                    // De Date-header is op de seconde; het midden van het verzoek als moment
+                    final int skew = (int) Math.round(((before + after) / 2.0 - server) / 1000.0);
+                    final boolean wasOff = Math.abs(clockSkew) >= CLOCK_WARN_S && clockCheckedAt > 0;
+                    clockSkew = skew;
+                    clockCheckedAt = System.currentTimeMillis();
+                    runOnUiThread(new Runnable() { public void run() { showClock(skew, wasOff); } });
+                } catch (Exception ignored) {}
+            }}).start();
+        }
+    };
+
+    private void showClock(int skew, boolean wasOff) {
+        boolean off = Math.abs(skew) >= CLOCK_WARN_S;
+        if (off && !wasOff) KioskLog.add(this, "Klok " + skewText(skew) + " op de server");
+        if (!off && wasOff) KioskLog.add(this, "Klok loopt weer gelijk");
+        if (off) {
+            String text = "De klok van dit toestel " + skewText(skew) + " · offline scans kunnen verkeerd gaan";
+            if (clockBanner == null) { clockBanner = banner(text, "#F2E65100"); bannerBox.addView(clockBanner, batteryBanner == null ? 0 : 1); }
+            else clockBanner.setText(text);
+        } else if (clockBanner != null) {
+            bannerBox.removeView(clockBanner);
+            clockBanner = null;
+        }
+    }
+
+    // ---------- schermstand en laadscherm ----------
+
+    /** orientation: portrait (standaard), landscape of auto (draait mee) */
+    private void applyOrientation() {
+        String o = prefs.getString("orientation", "portrait");
+        setRequestedOrientation("auto".equals(o) ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            : "landscape".equals(o) ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            : android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+    }
+
+    private View splash;
+    private final Runnable splashTimeout = new Runnable() { public void run() { hideSplash(); } };
+
+    /** Het EventVOX-logo tot de pagina geladen is (hoogstens 20 s), in plaats van een wit scherm */
+    private void showSplash() {
+        if (splash != null) return;
+        float dp = getResources().getDisplayMetrics().density;
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setBackgroundColor(Color.WHITE);
+        box.setClickable(true); // de pagina eronder is nog niet klaar
+        android.widget.ImageView logo = new android.widget.ImageView(this);
+        logo.setImageResource(getResources().getIdentifier("ic_launcher", "mipmap", getPackageName()));
+        box.addView(logo, new LinearLayout.LayoutParams(Math.round(96 * dp), Math.round(96 * dp)));
+        TextView name = new TextView(this);
+        name.setText("EventVOX");
+        name.setTextColor(Color.parseColor("#5e2572"));
+        name.setTextSize(22);
+        name.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        name.setGravity(Gravity.CENTER);
+        name.setPadding(0, Math.round(12 * dp), 0, Math.round(18 * dp));
+        box.addView(name);
+        ProgressBar bar = new ProgressBar(this);
+        bar.setIndeterminate(true);
+        box.addView(bar, new LinearLayout.LayoutParams(Math.round(32 * dp), Math.round(32 * dp)));
+        splash = box;
+        int index = web == null ? 0 : root.indexOfChild(web) + 1;
+        root.addView(box, index, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        handler.removeCallbacks(splashTimeout);
+        handler.postDelayed(splashTimeout, 20000);
+    }
+
+    private void hideSplash() {
+        handler.removeCallbacks(splashTimeout);
+        final View s = splash;
+        if (s == null) return;
+        splash = null;
+        s.animate().alpha(0f).setDuration(250).withEndAction(new Runnable() { public void run() { root.removeView(s); } });
+    }
+
+    // ---------- bediening vanuit EventVOX: opdrachten en instellingen ----------
+
+    private void runCommand(String json) {
+        int id;
+        String command;
+        try { JSONObject o = new JSONObject(json); id = o.getInt("id"); command = o.getString("command"); } catch (Exception e) { return; }
+        if (id <= prefs.getInt("last_command_id", 0)) return; // al uitgevoerd
+        prefs.edit().putInt("last_command_id", id).commit(); // eerst opslaan: restart/update beëindigen de app
+        KioskLog.add(this, "Opdracht uit EventVOX: " + command);
+        switch (command) {
+            case "reload": rebuildWeb("opdracht uit EventVOX", false); break;
+            case "restart": restartApp(); break;
+            case "update": updateNow(); break;
+            case "locate": locate(); break;
+            default: KioskLog.add(this, "Onbekende opdracht: " + command);
+        }
+    }
+
+    /** De app helemaal opnieuw starten (na 1,5 s, via de AlarmManager) */
+    private void restartApp() {
+        Intent i = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this, 1, i, android.app.PendingIntent.FLAG_CANCEL_CURRENT);
+        android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+        if (am != null) am.set(android.app.AlarmManager.RTC, System.currentTimeMillis() + 1500, pi);
+        try { stopLockTask(); } catch (Exception ignored) {}
+        finishAffinity();
+        handler.postDelayed(new Runnable() { public void run() { android.os.Process.killProcess(android.os.Process.myPid()); } }, 300);
+    }
+
+    /** Nu bijwerken: niet wachten tot het toestel rustig is */
+    private void updateNow() {
+        if (updateBusy) return;
+        final String url = updateUrl();
+        new Thread(new Runnable() { public void run() {
+            try {
+                final Updater.Info info = Updater.fetch(url);
+                if (info.versionCode > Updater.currentVersionCode(MainActivity.this)) {
+                    runOnUiThread(new Runnable() { public void run() { downloadAndInstall(info, false); } });
+                } else {
+                    KioskLog.add(MainActivity.this, "Nu bijwerken: al de nieuwste versie (" + appVersion() + ")");
+                }
+            } catch (Exception e) {
+                KioskLog.add(MainActivity.this, "Nu bijwerken mislukt: " + e.getMessage());
+            }
+        }}).start();
+    }
+
+    /** Instellingen uit EventVOX: elke versie één keer toepassen (met de controles van het beheerscherm) */
+    private void applyRemoteSettings(String json) {
+        try {
+            JSONObject o = new JSONObject(json);
+            int version = o.getInt("version");
+            if (version == prefs.getInt("remote_settings_version", 0)) return;
+            JSONObject values = o.optJSONObject("values");
+            java.util.List<String> applied = new java.util.ArrayList<>();
+            if (values != null) {
+                java.util.Iterator<String> keys = values.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    if (key.equals("url") || key.equals("pin") || key.equals("update_url")) continue; // alleen op het toestel
+                    String err = applySetting(key, String.valueOf(values.get(key)));
+                    if (err == null) applied.add(key); else KioskLog.add(this, "Instelling uit EventVOX geweigerd: " + key + " (" + err + ")");
+                }
+            }
+            java.util.Collections.sort(applied);
+            prefs.edit().putInt("remote_settings_version", version)
+                .putString("remote_settings_keys", android.text.TextUtils.join(", ", applied)).apply();
+            KioskLog.add(this, applied.isEmpty() ? "Instellingen uit EventVOX: weer die van het toestel" : "Instellingen uit EventVOX toegepast: " + android.text.TextUtils.join(", ", applied));
+            if (adminView != null) adminEmit("refresh", new JSONObject());
+        } catch (Exception ignored) {}
+    }
+
+    // ---------- Zoek mij ----------
+
+    private View locateView;
+    private android.media.ToneGenerator locateTone;
+    private final Runnable locateStep = new Runnable() {
+        int n = 0;
+        public void run() {
+            if (locateView == null) { n = 0; return; }
+            if (n++ >= 30) { n = 0; stopLocate(); return; }
+            locateView.setBackgroundColor(n % 2 == 0 ? Color.parseColor("#5e2572") : Color.parseColor("#ff6a00"));
+            try { if (locateTone != null) locateTone.startTone(android.media.ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 600); } catch (Exception ignored) {}
+            doVibrate("[500]");
+            handler.postDelayed(this, 1000);
+        }
+    };
+
+    /** 30 s piepen, trillen en knipperen (fel scherm); een tik stopt het */
+    private void locate() {
+        if (locateView != null) return;
+        markActivity();
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setBackgroundColor(Color.parseColor("#5e2572"));
+        TextView t = new TextView(this);
+        t.setText("Hier ben ik!\n\nTik om te stoppen");
+        t.setTextColor(Color.WHITE);
+        t.setTextSize(30);
+        t.setGravity(Gravity.CENTER);
+        t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        box.addView(t);
+        box.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { stopLocate(); } });
+        locateView = box;
+        root.addView(box, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        setBrightness(1f);
+        try { locateTone = new android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100); } catch (Exception e) { locateTone = null; }
+        handler.post(locateStep);
+    }
+
+    private void stopLocate() {
+        handler.removeCallbacks(locateStep);
+        if (locateTone != null) { try { locateTone.release(); } catch (Exception ignored) {} locateTone = null; }
+        if (locateView != null) { root.removeView(locateView); locateView = null; }
+        setBrightness(-1f);
+        focusWeb();
+    }
+
+    // ---------- beheer-QR-code ----------
+
+    /**
+     * EVXADMIN:<verloop>.<HMAC-SHA256 van het verloop met de sleutel van de organisatie, hex> (gemaakt in EventVOX):
+     * opent het beheerscherm zonder PIN tot het verloop. Werkt zonder netwerk; de sleutel kwam met de heartbeat.
+     */
+    private void handleAdminQr(String text) {
+        String key = TokenVault.get(prefs, "admin_qr_key");
+        if (key == null) { toast("Deze terminal kent nog geen beheer-QR-codes: hij moet eerst gekoppeld zijn in EventVOX"); return; }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)EVXADMIN:(\\d+)\\.([0-9a-f]{64})").matcher(text.trim());
+        if (!m.matches()) { toast("Geen geldige beheer-QR-code"); return; }
+        long expires = Long.parseLong(m.group(1));
+        long now = System.currentTimeMillis() / 1000;
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            byte[] k = new byte[32];
+            for (int i = 0; i < 32; i++) k[i] = (byte) Integer.parseInt(key.substring(i * 2, i * 2 + 2), 16);
+            mac.init(new javax.crypto.spec.SecretKeySpec(k, "HmacSHA256"));
+            byte[] sig = mac.doFinal(m.group(1).getBytes("UTF-8"));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : sig) hex.append(String.format("%02x", b));
+            if (!java.security.MessageDigest.isEqual(hex.toString().getBytes("UTF-8"), m.group(2).toLowerCase(java.util.Locale.ROOT).getBytes("UTF-8"))) {
+                KioskLog.add(this, "Beheer-QR-code geweigerd: handtekening klopt niet (ingetrokken of van een andere organisatie)");
+                toast("Deze beheer-QR-code is ingetrokken of hoort bij een andere organisatie");
+                return;
+            }
+        } catch (Exception e) { toast("Beheer-QR-code kon niet worden gecontroleerd"); return; }
+        if (expires < now) { toast("Deze beheer-QR-code is verlopen"); return; }
+        if (expires > now + 8 * 86400L) { toast("Deze beheer-QR-code is te lang geldig (controleer de klok van het toestel)"); return; }
+        KioskLog.add(this, "Beheerscherm geopend met een beheer-QR-code");
+        if (adminView == null) showAdmin();
+        adminUnlocked = true;
+        adminEmit("unlocked", new JSONObject());
     }
 
     // ---------- trillen ----------
@@ -1370,9 +1701,25 @@ public class MainActivity extends Activity {
     private long heldAt = 0;
     private final Runnable heldTimeout = new Runnable() { public void run() { finishHeld(false); } };
 
+    /** Codes die de app zelf afhandelt (nooit naar de website): wifi-QR-codes en beheer-QR-codes */
+    private static final String[] APP_PREFIXES = {"WIFI:", "EVXADMIN:"};
+
     private static boolean wifiPrefix(String text) {
         String t = text.toUpperCase(java.util.Locale.ROOT);
-        return t.length() <= 5 ? "WIFI:".startsWith(t) : t.startsWith("WIFI:");
+        for (String p : APP_PREFIXES) if (t.length() <= p.length() ? p.startsWith(t) : t.startsWith(p)) return true;
+        return false;
+    }
+
+    private static boolean isAppCode(String text) {
+        String t = text.toUpperCase(java.util.Locale.ROOT);
+        for (String p : APP_PREFIXES) if (t.length() > p.length() && t.startsWith(p)) return true;
+        return false;
+    }
+
+    /** Een code van de app: wifi of beheer */
+    private void handleAppCode(String text) {
+        if (text.regionMatches(true, 0, "EVXADMIN:", 0, 9)) handleAdminQr(text);
+        else handleWifiQr(text);
     }
 
     /** True als de toets is vastgehouden of als deel van een wifi-code is gebruikt */
@@ -1418,11 +1765,13 @@ public class MainActivity extends Activity {
     private void finishHeld(boolean enter) {
         handler.removeCallbacks(heldTimeout);
         String text = heldText.toString();
-        boolean wifi = text.length() > 5 && wifiPrefix(text) && (enter || WifiProfiles.parseQr(text) != null);
-        if (wifi) {
+        boolean complete = text.regionMatches(true, 0, "EVXADMIN:", 0, 9) ? text.matches("(?i)EVXADMIN:\\d+\\.[0-9a-f]{64}")
+            : WifiProfiles.parseQr(text) != null;
+        boolean code = isAppCode(text) && (enter || complete);
+        if (code) {
             heldKeys.clear();
             heldText.setLength(0);
-            handleWifiQr(text);
+            handleAppCode(text);
         } else {
             flushHeld();
         }
@@ -1492,7 +1841,7 @@ public class MainActivity extends Activity {
 
     private void deliverScan(String data, String symbology) {
         markActivity();
-        if (data.regionMatches(true, 0, "WIFI:", 0, 5)) { handleWifiQr(data); return; } // nooit naar de website
+        if (isAppCode(data)) { handleAppCode(data); return; } // nooit naar de website
         lastScan = data + (symbology.isEmpty() ? "" : " (" + symbology + ")");
         JSONObject o = new JSONObject();
         try { o.put("data", data); o.put("symbology", symbology); } catch (Exception ignored) {}
@@ -1799,6 +2148,8 @@ public class MainActivity extends Activity {
         st.put("dim_level", prefs.getInt("dim_level", 15));
         st.put("nightly_reload", prefs.getBoolean("nightly_reload", true));
         st.put("nightly_hour", prefs.getInt("nightly_hour", 4));
+        st.put("low_battery", prefs.getInt("low_battery", 15));
+        st.put("orientation", prefs.getString("orientation", "portrait"));
         st.put("menu_taps", prefs.getInt("menu_taps", 10));
         st.put("scan_mode", scanMode());
         st.put("datawedge", manageDataWedge() ? "app" : "off");
@@ -1824,6 +2175,9 @@ public class MainActivity extends Activity {
         health.put("diagnosticsSent", diag > 0 ? new java.text.SimpleDateFormat("d-M HH:mm").format(new java.util.Date(diag)) : "");
         health.put("diagnosticsPending", diagnosticsPending);
         health.put("identity", TokenVault.get(prefs, "terminal_token") != null);
+        health.put("clock", clockCheckedAt == 0 ? "" : Math.abs(clockSkew) < CLOCK_WARN_S ? "loopt gelijk met de server" : skewText(clockSkew));
+        health.put("remote", prefs.getInt("remote_settings_version", 0) > 0 ? prefs.getString("remote_settings_keys", "") : "");
+        health.put("adminQr", TokenVault.get(prefs, "admin_qr_key") != null);
         String log = KioskLog.text(this);
         String[] lines = log.split("\n");
         StringBuilder tail = new StringBuilder();
@@ -1885,9 +2239,9 @@ public class MainActivity extends Activity {
         }
     }
 
-    private static final java.util.List<String> STRING_KEYS = java.util.Arrays.asList("nfc_mode", "nfc_uid_format", "nfc_keyboard_value", "scan_mode", "datawedge", "update_channel");
+    private static final java.util.List<String> STRING_KEYS = java.util.Arrays.asList("nfc_mode", "nfc_uid_format", "nfc_keyboard_value", "scan_mode", "datawedge", "update_channel", "orientation");
     private static final java.util.List<String> BOOL_KEYS = java.util.Arrays.asList("nfc_send_enter", "auto_update", "keep_screen_on", "ignore_ssl_errors", "vibrate", "nightly_reload");
-    private static final java.util.List<String> INT_KEYS = java.util.Arrays.asList("nfc_refresh_seconds", "update_check_hours", "reload_minutes", "menu_taps", "volume_lock", "dim_minutes", "dim_level", "nightly_hour");
+    private static final java.util.List<String> INT_KEYS = java.util.Arrays.asList("nfc_refresh_seconds", "update_check_hours", "reload_minutes", "menu_taps", "volume_lock", "dim_minutes", "dim_level", "nightly_hour", "low_battery");
 
     /** Eén instelling opslaan en toepassen; geeft een foutmelding of null. */
     private String applySetting(String key, String v) {
@@ -1921,6 +2275,7 @@ public class MainActivity extends Activity {
             }});
             return null;
         }
+        if ("orientation".equals(key) && !v.matches("portrait|landscape|auto")) return "orientation moet portrait, landscape of auto zijn";
         if (STRING_KEYS.contains(key)) e.putString(key, v);
         else if (BOOL_KEYS.contains(key)) e.putBoolean(key, Boolean.parseBoolean(v));
         else if (INT_KEYS.contains(key)) {
@@ -1930,12 +2285,15 @@ public class MainActivity extends Activity {
             if ("volume_lock".equals(key)) n = Math.min(100, n);
             if ("dim_level".equals(key) && (n < 5 || n > 60)) return "Kies 5 tot 60%";
             if ("nightly_hour".equals(key)) n = Math.min(23, n);
+            if ("low_battery".equals(key)) n = Math.min(50, n);
             e.putInt(key, Math.max(0, n));
         } else return "Onbekende instelling: " + key;
         e.commit();
         runOnUiThread(new Runnable() { public void run() {
             applyRuntimeSettings();
             applyVolume();
+            applyOrientation();
+            if (lastBattery != null) updateBatteryBanner(batteryJson(lastBattery));
             if (dimmed) setBrightness(-1f);
             schedulePeriodicReload();
             handler.removeCallbacks(updateCheck);

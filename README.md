@@ -238,6 +238,24 @@ interval, en het update-adres. In `webkiosk.properties`: `auto_update`, `update_
   wachtwoorden of tokens). Beheerscherm > Apparaat: *Diagnose naar EventVOX sturen*; in EventVOX kan het ook op afstand
   worden opgevraagd (terminalpagina). `WebKiosk.getStatus()` geeft de status voor de heartbeat.
 
+## Op de evenementdag
+- **Klok**: als device owner houdt Android de automatische tijd aan; elke 15 minuten vergelijkt de app de klok met de
+  server. Meer dan 2 minuten verschil: een oranje balk (offline scans worden op de klok van het toestel beoordeeld) en
+  een waarschuwing in EventVOX.
+- **Accu bijna leeg** (`low_battery`, standaard 15%): een rode balk "leg me aan de lader" als hij niet aan de lader ligt.
+- **Schermstand** (`orientation`): standaard staand; ook liggend of meedraaien.
+- **Laadscherm**: het EventVOX-logo tijdens het laden in plaats van een wit scherm.
+
+## Bediening vanuit EventVOX
+Op de terminalpagina (kaart Kiosk-app) en voor een selectie in de terminallijst:
+- **Opdrachten**: *Pagina herladen*, *App herstarten*, *Nu bijwerken* (zonder te wachten tot het toestel rustig is) en
+  *Zoek mij* (30 s piepen, trillen en knipperen; een tik stopt het). Elke opdracht wordt precies één keer uitgevoerd.
+- **Kiosk-instellingen**: volume, dimmen, scherm altijd aan, nachtelijk herladen, kanaal, automatisch bijwerken, NFC,
+  scanner, trillen, accugrens en schermstand. Niet het adres en de PIN: die blijven op het toestel. Instellingen uit
+  EventVOX worden één keer toegepast; wie daarna op het toestel iets wijzigt, houdt dat tot EventVOX opnieuw iets stuurt.
+- **Beheer-QR-code** (knop op de terminalspagina): opent het beheerscherm zonder PIN, 1 uur tot 1 week geldig, ook
+  zonder netwerk. *Alle beheer-QR-codes intrekken* maakt eerdere codes ongeldig.
+
 ## Testkanaal
 Zet één of twee toestellen op **Test** (beheerscherm > Updates, of `update_channel=beta`). Markeer een nieuwe release op
 GitHub eerst als **pre-release**: alleen de testtoestellen krijgen hem. Werkt hij, haal het vinkje weg (of maak een gewone

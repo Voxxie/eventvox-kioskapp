@@ -143,6 +143,9 @@
             ['Kiosk-modus', s.owner ? 'aan (device owner)' : '<span style="color:var(--red)">uit: geen device owner</span>'],
             ['Terminal', h.identity ? 'identiteit bewaard (komt terug na een crash)' : 'nog niet gekoppeld of geen scanterminal'],
             ['Crashes', h.crashes ? h.crashes + ' sinds de start, laatste ' + h.lastCrash + ' (hersteld)' : 'geen sinds de start'],
+            ['Klok', h.clock ? (/gelijk/.test(h.clock) ? h.clock : '<span style="color:var(--red)">' + esc(h.clock) + '</span>') : 'nog niet gecontroleerd'],
+            ['Uit EventVOX', h.remote ? 'ingesteld: ' + esc(h.remote) : 'geen instellingen (die van dit toestel)'],
+            ['Beheer-QR', h.adminQr ? 'kan met een beheer-QR-code worden geopend' : 'nog geen sleutel (nog niet gekoppeld)'],
         ].map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('');
     }
 
@@ -221,6 +224,7 @@
     // Terugmeldingen van de app
     window.kioskEvent = function (type, d) {
         if (type === 'toast') toast(d.text);
+        if (type === 'unlocked' && !$('#pin').hidden) openAdmin(); // beheer-QR-code gescand op het PIN-scherm
         if (type === 'refresh') refresh();
         if (type === 'back') {
             if (!$('#sheet').hidden) $('#sheet').hidden = true;
@@ -256,4 +260,7 @@
     };
 
     renderDots();
+    // Geopend met een beheer-QR-code: al ontgrendeld, meteen het beheer
+    var pre = call('state');
+    if (pre && pre.version) openAdmin();
 })();

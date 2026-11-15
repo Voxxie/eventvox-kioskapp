@@ -79,7 +79,8 @@ Prioriteit: `webkiosk.properties` (alleen een **gewijzigd** bestand wordt opnieu
 intent-extras (`url`, `pin`) → wat in het beheerscherm is ingesteld (opgeslagen in `SharedPreferences` "kiosk").
 Sleutels: `url` (met `{serial}`, `{version}`, `{model}`), `pin`, `menu_taps`, `keep_screen_on`, `reload_minutes`,
 `ignore_ssl_errors`, `nfc_mode`, `nfc_uid_format`, `nfc_keyboard_value`, `nfc_send_enter`, `nfc_debounce_ms`,
-`nfc_refresh_seconds`, `volume_lock`, `dim_minutes`, `dim_level`, `nightly_reload`, `nightly_hour`, `update_channel`,
+`nfc_refresh_seconds`, `volume_lock`, `dim_minutes`, `dim_level`, `nightly_reload`, `nightly_hour`, `low_battery`,
+`orientation`, `update_channel`,
 `auto_update`, `update_check_hours`, `update_url`, `wifi.N.ssid|password|security|hidden|priority`,
 `wifi_remove_others`, `wifi_lockdown`, `wifi_qr`, `datawedge`, `scan_mode`, `vibrate`.
 Een nieuwe sleutel: standaardwaarde in de code, inlezen in `readFileConfig()`, tonen/wijzigen in `adminState()` en
@@ -99,8 +100,11 @@ de frontend toont "Kiosk-app" (`kioskAppText`).
 | `getWifi()` | JSON `{ connected, enabled, level 0-4, rssi, ssid?, link_speed, frequency }` |
 | `getSerial()`, `getDeviceInfo()` | serienummer; JSON `{ serial, model, manufacturer, android, sdk, build, appVersion }` |
 | `vibrate(pattern)` | trillen (JSON-array of getal, zoals `navigator.vibrate`) |
-| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, nfc_restarts, wifi, update { checked_at, result }, log? }`; `log` alleen de eerste keer na `requestDiagnostics()` |
+| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, nfc_restarts, clock_skew_s, settings_version, command_done, orientation, wifi, update { checked_at, result }, log? }`; `log` alleen de eerste keer na `requestDiagnostics()` |
 | `requestDiagnostics()` | het logboek gaat mee met de volgende `getStatus()` |
+| `command(json)` | opdracht uit EventVOX `{ id, command: reload\|restart\|update\|locate }`; elke id één keer (`last_command_id`), gemeld als `command_done` in `getStatus()` |
+| `applySettings(json)` | instellingen uit EventVOX `{ version, values }`; elke versie één keer, via `applySetting()` (nooit `url`, `pin`, `update_url`) |
+| `setAdminKey(hex)` | sleutel van beheer-QR-codes (64 hex), versleuteld in `TokenVault` |
 
 **Events** op `window`: `webkiosk-nfc` `{ uid, uidHex, techs, ndef: [{type, value}] }`, `webkiosk-scan`
 `{ data, symbology }`, `webkiosk-battery` (zoals `getBattery`), `webkiosk-wifi` (zoals `getWifi`); ook als functies
@@ -111,10 +115,13 @@ de frontend toont "Kiosk-app" (`kioskAppText`).
 "geen accu" telt) en `navigator.vibrate()` (de trilmotor; een WebView trilt anders alleen na een tik).
 
 **Scans en NFC** komen standaard als **toetsaanslagen + Enter** in de pagina (`typeText`), zoals een scanner-toetsenbord:
-de scanterminal hoeft niets van de app te weten. Codes die met `WIFI:` beginnen gaan nooit naar de pagina.
+de scanterminal hoeft niets van de app te weten. Codes die met `WIFI:` of `EVXADMIN:` beginnen gaan nooit naar de pagina
+(wifi-QR-code; beheer-QR-code `EVXADMIN:<verloop>.<HMAC-SHA256 hex>`, offline gecontroleerd met de sleutel uit `setAdminKey`).
 
 **Backend-velden die hiervan afhangen** (Voxxie/eventvox-backend, `Helpers\Terminals`): heartbeat `battery`,
-`battery_pack` (migratie 130), `kiosk_status` + `log` en antwoord `kiosk_diagnostics` (migratie 131); de backend
+`battery_pack` (migratie 130), `kiosk_status` + `log` en antwoord `kiosk_diagnostics` (migratie 131), antwoord
+`kiosk_command`, `kiosk_settings` en `kiosk_admin_key` (migratie 132; de scanterminal geeft ze door aan `command()`,
+`applySettings()` en `setAdminKey()`); de backend
 laat onbekende velden en foute waarden vallen, nooit een fout. Een veld toevoegen aan `getStatus()`: eerst in
 `Terminals::kioskStatus()` (anders wordt het weggegooid), dan in de frontend tonen.
 
@@ -136,6 +143,11 @@ in), dan vervalt de kopie. Verander die sleutelnaam nooit zonder de frontend mee
 - Crash van de pagina (`onRenderProcessGone`): nieuwe WebView; 3× binnen een minuut: 30 s wachten.
 - Nachtelijk herladen (standaard 04:00–07:00, alleen na 5 min rust), volume vast (80%, volumeknoppen geblokkeerd),
   dimmen (alleen met "scherm altijd aan", na 2 min naar 15%).
+- Meldingen bovenaan (`bannerBox`, tikken gaan erdoor): accu bijna leeg (`low_battery`, 15%), klok wijkt > 2 min af
+  (HEAD naar de website, Date-header; als device owner `setAutoTimeRequired`), offline met knop.
+- Instellingen uit EventVOX gelden één keer per versie; een latere wijziging op het toestel blijft tot EventVOX een
+  nieuwe versie stuurt. Een nieuwe instelling die EventVOX mag zetten: ook in `Terminals::KIOSK_SETTINGS` (backend) en
+  het formulier in de frontend.
 
 ## Testen
 
