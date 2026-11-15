@@ -1,0 +1,14 @@
+.wifi { justify-content: flex-start; }
+.wifi .pin-top { margin-top: 2vh; }
+.wifi .muted { margin: 4px 12px 0; }
+.wifi-card { background: #fff; color: var(--text); border-radius: 18px; padding: 20px; margin: 24px 0 18px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.wifi-ssid { font-size: 22px; font-weight: 700; color: var(--purple); margin-bottom: 12px; word-break: break-all; }
+.wifi-state { display: flex; align-items: center; margin-top: 16px; padding: 12px; border-radius: 12px; background: #f1ecf4; color: var(--purple); font-weight: 500; }
+.wifi-state.ok { background: #e8f6ec; color: var(--green); }
+.wifi-state.err { background: #fdecec; color: var(--red); }
+.wifi-state.ok .pulse, .wifi-state.err .pulse { display: none; }
+.wifi-buttons { display: flex; flex-direction: column; }
+.btn.big { padding: 16px; font-size: 16px; border-radius: 14px; margin-bottom: 10px; }
+.btn.ghost { background: rgba(255,255,255,.14); color: #fff; }
+.btn:disabled { opacity: .5; }
+.wifi .btn.primary { background: #fff; color: var(--purple); }

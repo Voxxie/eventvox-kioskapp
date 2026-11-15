@@ -52,6 +52,11 @@ public class WifiProfiles {
      */
     @SuppressWarnings("deprecation")
     public static String apply(Context c, List<Profile> profiles, Set<String> previous, boolean removeOthers, Set<String> appliedOut) {
+        return apply(c, profiles, previous, removeOthers, appliedOut, null);
+    }
+
+    /** keep: SSID's die nooit verwijderd worden (netwerken die via een wifi-QR-code zijn toegevoegd) */
+    public static String apply(Context c, List<Profile> profiles, Set<String> previous, boolean removeOthers, Set<String> appliedOut, Set<String> keep) {
         WifiManager wm = (WifiManager) c.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         if (wm == null) return "geen wifi";
         if (!wm.isWifiEnabled()) wm.setWifiEnabled(true);
@@ -81,13 +86,85 @@ public class WifiProfiles {
         }
         if (configured != null) for (WifiConfiguration wc : configured) {
             String s = unquote(wc.SSID);
-            if (wanted.contains(s)) continue;
+            if (wanted.contains(s) || (keep != null && keep.contains(s))) continue;
             if (removeOthers || (previous != null && previous.contains(s))) {
                 if (wm.removeNetwork(wc.networkId)) removed++;
             }
         }
         wm.saveConfiguration();
         return ok + " ingesteld" + (failed > 0 ? ", " + failed + " mislukt" : "") + (removed > 0 ? ", " + removed + " verwijderd" : "");
+    }
+
+    /**
+     * Een wifi-QR-code (het standaardformaat van telefoons en QR-generatoren):
+     *   WIFI:T:WPA;S:netwerknaam;P:wachtwoord;H:false;;
+     * T: WPA (ook WPA2/WPA3/SAE), WEP of nopass; S: naam; P: wachtwoord; H: verborgen. \ ontsnapt ; , : " en \.
+     * Geeft null als het geen geldige wifi-code is.
+     */
+    public static Profile parseQr(String text) {
+        if (text == null) return null;
+        String t = text.trim();
+        if (!t.regionMatches(true, 0, "WIFI:", 0, 5)) return null;
+        Map<String, String> f = new HashMap<>();
+        StringBuilder cur = new StringBuilder();
+        String key = null;
+        for (int i = 5; i < t.length(); i++) {
+            char ch = t.charAt(i);
+            if (ch == '\\' && i + 1 < t.length()) { cur.append(t.charAt(++i)); continue; }
+            if (key == null && ch == ':') { key = cur.toString().trim().toUpperCase(Locale.ROOT); cur.setLength(0); continue; }
+            if (ch == ';') {
+                if (key != null && !f.containsKey(key)) f.put(key, cur.toString());
+                key = null; cur.setLength(0); continue;
+            }
+            cur.append(ch);
+        }
+        if (key != null && !f.containsKey(key)) f.put(key, cur.toString());
+        String ssid = f.get("S");
+        if (ssid == null || ssid.isEmpty() || ssid.length() > 32) return null;
+        Profile w = new Profile();
+        w.ssid = ssid;
+        w.password = f.containsKey("P") ? f.get("P") : "";
+        String type = f.containsKey("T") ? f.get("T").trim().toUpperCase(Locale.ROOT) : "";
+        if (type.equals("WEP")) w.security = "WEP";
+        else if (type.equals("NOPASS") || type.equals("NONE") || (type.isEmpty() && w.password.isEmpty())) w.security = "OPEN";
+        else w.security = "WPA"; // WPA, WPA2, WPA3/SAE (Android 8 kent alleen WPA/WPA2-Personal)
+        w.hidden = "true".equalsIgnoreCase(String.valueOf(f.get("H")).trim());
+        if (w.security.equals("WPA") && (w.password.length() < 8 || w.password.length() > 64)) return null;
+        return w;
+    }
+
+    /** Eén netwerk toevoegen (of bijwerken) en er nu mee verbinden; geeft het networkId, of -1. */
+    @SuppressWarnings("deprecation")
+    public static int addAndConnect(Context c, Profile w) {
+        WifiManager wm = (WifiManager) c.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        if (wm == null) return -1;
+        if (!wm.isWifiEnabled()) wm.setWifiEnabled(true);
+        WifiConfiguration wc = build(w);
+        WifiConfiguration old = null;
+        List<WifiConfiguration> configured = null;
+        try { configured = wm.getConfiguredNetworks(); } catch (Exception ignored) {}
+        if (configured != null) for (WifiConfiguration x : configured) if (w.ssid.equals(unquote(x.SSID))) old = x;
+        int id;
+        if (old != null) { wc.networkId = old.networkId; id = wm.updateNetwork(wc); }
+        else id = wm.addNetwork(wc);
+        if (id == -1 && old != null) { wm.removeNetwork(old.networkId); wc.networkId = -1; id = wm.addNetwork(wc); }
+        if (id == -1) return -1;
+        wm.saveConfiguration();
+        wm.enableNetwork(id, true); // nu dit netwerk proberen (zet de andere tijdelijk uit: zie enableAll)
+        wm.reconnect();
+        return id;
+    }
+
+    /** Alle opgeslagen netwerken weer aan (na addAndConnect, of het nu lukte of niet) */
+    @SuppressWarnings("deprecation")
+    public static void enableAll(Context c) {
+        WifiManager wm = (WifiManager) c.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        if (wm == null) return;
+        try {
+            List<WifiConfiguration> configured = wm.getConfiguredNetworks();
+            if (configured != null) for (WifiConfiguration x : configured) wm.enableNetwork(x.networkId, false);
+            wm.saveConfiguration();
+        } catch (Exception ignored) {}
     }
 
     /** Gebruikers kunnen netwerken van de device owner niet wijzigen/vergeten (Android 6+). */

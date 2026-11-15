@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Wifi toevoegen</title>
+<link rel="stylesheet" href="admin.css">
+<link rel="stylesheet" href="wifi.css">
+</head>
+<body>
+<section class="pin wifi">
+  <div class="pin-top">
+    <img src="logo.png" alt="" class="pin-logo">
+    <h1>Wifi-netwerk toevoegen</h1>
+    <p class="muted">Dit toestel heeft geen netwerk. Deze QR-code voegt een netwerk toe:</p>
+  </div>
+  <div class="wifi-card">
+    <div class="wifi-ssid" id="ssid"></div>
+    <dl class="kv">
+      <dt>Beveiliging</dt><dd id="security"></dd>
+      <dt>Verborgen</dt><dd id="hidden"></dd>
+    </dl>
+    <div class="wifi-state" id="state" hidden><span class="pulse" id="pulse"></span><span id="state-text"></span></div>
+  </div>
+  <div class="wifi-buttons">
+    <button class="btn primary big" id="add">Toevoegen en verbinden</button>
+    <button class="btn ghost big" id="close">Annuleren</button>
+  </div>
+</section>
+<script src="wifi.js"></script>
+</body>
+</html>

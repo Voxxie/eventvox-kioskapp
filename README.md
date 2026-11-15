@@ -126,6 +126,19 @@ wifi_lockdown=false        # true: gebruikers kunnen deze netwerken niet wijzige
   het toestel; de app heeft de instellingen dan al opgeslagen. Zet het bestand niet met echte wachtwoorden in Git.
 - Status: beheermenu > Overige instellingen > Wifi-instellingen toont welke profielen de app heeft gezet.
 
+### Wifi toevoegen met een QR-code
+Heeft het toestel 30 seconden geen netwerk, dan toont de app bovenaan: *Geen netwerk · scan een wifi-QR-code om een
+netwerk toe te voegen*. De balk blokkeert niets: de scanterminal blijft offline scannen. Een gescande wifi-QR-code
+(`WIFI:T:WPA;S:naam;P:wachtwoord;;`, het standaardformaat) opent een bevestiging met de netwerknaam; *Toevoegen en
+verbinden* voegt het netwerk toe en verbindt (tot 60 s). Lukt dat niet, dan blijft het netwerk bewaard en blijven de
+andere netwerken gewoon werken.
+- Wifi-codes gaan nooit naar de website. Met netwerk doet een wifi-code niets, behalve in het beheerscherm: daar wordt
+  een gescande wifi-code meteen toegevoegd (Wifi-kaart).
+- Een code maken: in EventVOX bij Terminals de knop *Wifi-QR-code* (het wachtwoord blijft in de browser), met een
+  QR-generator, of een Android-telefoon (Instellingen > Wifi > Delen).
+- Via QR toegevoegde netwerken worden niet weggehaald door `wifi_remove_others` of de profielen uit `webkiosk.properties`.
+- Werkt met de scanner via DataWedge (standaard: `datawedge=app`); `wifi_qr=false` zet het uit.
+
 ## Serienummer in de URL
 Standaard-URL: `https://eventvox.nl/scanterminal?serial={serial}`
 `{serial}` wordt vervangen door het serienummer van het toestel (`{model}` door het model). Eindigt de URL op `serial=`,
