@@ -38,6 +38,9 @@ zonder tussenversies. Daarom:
 
 ## Bouwen en releasen
 
+De hulpklassen (`NetworkScreen`, `AdminScreen`, `FindMe`) krijgen de Activity mee (`a`) en gebruiken de velden van
+`MainActivity` (package-private); `Battery` en `Scripts` zijn statisch.
+
 - **Geen Gradle, geen Android Studio.** `build.sh` gebruikt Debian-pakketten:
   `apt install aapt apksigner zipalign android-sdk-platform-23 dalvik-exchange default-jdk`, dan `./build.sh`
   (APK: `webkiosk.apk`; variabelen `VERSION_NAME`, `VERSION_CODE`, `KEYSTORE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`,
@@ -58,7 +61,11 @@ zonder tussenversies. Daarom:
 
 | Bestand | Wat |
 |---|---|
-| `app/src/nl/webkiosk/MainActivity.java` | Alles in één Activity: WebView (`createWeb()`), kiosk/device owner, NFC (reader mode), DataWedge, toetsenbord-focus en wifi-QR via toetsen, wifi, batterij, trillen, updates, beheerscherm-koppeling (`AdminBridge`), netwerkscherm (`WifiBridge`), crash-herstel, terminal-identiteit, nachtelijk herladen, volume, dimmen, status/diagnose. Secties met `// ---------- naam ----------`. |
+| `app/src/nl/webkiosk/MainActivity.java` | De Activity: WebView (`createWeb()`), kiosk/device owner, NFC (reader mode), DataWedge, toetsenbord-focus en wifi-QR via toetsen, wifi, trillen, updates, crash-herstel, terminal-identiteit, nachtelijk herladen, volume, dimmen, status/diagnose. Secties met `// ---------- naam ----------`. |
+| `NetworkScreen.java` | Offline-balk en het netwerkscherm (`WifiBridge`, `assets/wifi.*`). |
+| `AdminScreen.java` | Beheerscherm (`AdminBridge`, `adminState()`, `applySetting()`, `adminAction()`) en beheer-QR-codes. |
+| `FindMe.java` | Zoek mij en de locatie daarbij. |
+| `Battery.java` / `Scripts.java` | Accu als JSON (met Zebra-accu); de JavaScript die de app in de pagina zet (batterij, trillen). |
 | `Updater.java` / `UpdateReceiver.java` | `update.json` ophalen (redirects zelf volgen), APK downloaden + SHA-256, stil installeren (device owner) of via Android; herstart na `MY_PACKAGE_REPLACED`. |
 | `WifiProfiles.java` | Wifi uit `webkiosk.properties`, wifi-QR-codes (`parseQr`), toevoegen/verbinden, netwerken in de buurt. |
 | `DataWedge.java` | Eigen DataWedge-profiel "EventVOX-Webkiosk" (scanner aan, toetsaanslagen uit, scan als intent `nl.webkiosk.SCAN`). |
@@ -84,7 +91,7 @@ Sleutels: `url` (met `{serial}`, `{version}`, `{model}`), `pin`, `menu_taps`, `k
 `auto_update`, `update_check_hours`, `update_url`, `wifi.N.ssid|password|security|hidden|priority`,
 `wifi_remove_others`, `wifi_lockdown`, `wifi_qr`, `datawedge`, `scan_mode`, `vibrate`.
 Een nieuwe sleutel: standaardwaarde in de code, inlezen in `readFileConfig()`, tonen/wijzigen in `adminState()` en
-`applySetting()` (lijsten `STRING_KEYS`/`BOOL_KEYS`/`INT_KEYS`), in `webkiosk.properties` en in de README.
+`applySetting()` (`AdminScreen`) (lijsten `STRING_KEYS`/`BOOL_KEYS`/`INT_KEYS`), in `webkiosk.properties` en in de README.
 
 ## Contract met EventVOX (eventvox-frontend, eventvox-backend)
 
