@@ -128,6 +128,7 @@ public class MainActivity extends Activity {
         web.requestFocus();
         watchSystemBars();
         setupDataWedge();
+        applyProvisionExtras(); // na createWeb: een url laadt meteen
         loadHome();
         schedulePeriodicReload();
         handler.postDelayed(updateCheck, 60000); // eerste controle 1 minuut na start
@@ -303,6 +304,29 @@ public class MainActivity extends Activity {
             if (WifiProfiles.mentioned(p)) applyWifi(p);
             return;
         }
+    }
+
+    /**
+     * Instellingen uit de QR-code waarmee het toestel is ingericht (AdminReceiver), één keer, via dezelfde controle als
+     * het beheerscherm. Alleen de namen in het logboek, nooit de waarden (PIN).
+     */
+    void applyProvisionExtras() {
+        String json = prefs.getString("provision_extras", null);
+        if (json == null) return;
+        prefs.edit().remove("provision_extras").commit();
+        java.util.List<String> applied = new java.util.ArrayList<>(), refused = new java.util.ArrayList<>();
+        try {
+            JSONObject o = new JSONObject(json);
+            java.util.Iterator<String> keys = o.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                if (key.equals("update_url")) { refused.add(key); continue; }
+                String err = adminScreen.applySetting(key, o.optString(key, "").trim());
+                if (err == null) applied.add(key); else refused.add(key);
+            }
+        } catch (Exception ignored) {}
+        KioskLog.add(this, "Instellingen uit de inricht-QR-code: " + (applied.isEmpty() ? "geen" : android.text.TextUtils.join(", ", applied))
+            + (refused.isEmpty() ? "" : " (geweigerd: " + android.text.TextUtils.join(", ", refused) + ")"));
     }
 
     String homeUrl() { return prefs.getString("url", DEFAULT_URL); }
@@ -495,6 +519,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onNewIntent(Intent i) {
         super.onNewIntent(i);
+        if (i != null && i.getBooleanExtra("provisioned", false)) { applyDeviceOwnerPolicies(); applyProvisionExtras(); loadHome(); return; }
         if (i != null && i.getExtras() != null && (i.hasExtra("url") || i.hasExtra("pin"))) {
             readIntentConfig(i);
             loadHome();
