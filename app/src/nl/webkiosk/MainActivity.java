@@ -225,6 +225,8 @@ public class MainActivity extends Activity {
                     KioskLog.add(MainActivity.this, "Sleutel voor beheer-QR-codes ontvangen");
                 }
             }
+            /** Wifi-netwerken uit EventVOX (admin-tenant): { version, networks: [{ ssid, security, password, hidden, priority }] } */
+            @JavascriptInterface public void setWifiProfiles(final String json) { runOnUiThread(new Runnable() { public void run() { applyEventvoxWifi(json); } }); }
             @JavascriptInterface public String getDeviceInfo() {
                 JSONObject o = new JSONObject();
                 try {
@@ -554,12 +556,62 @@ public class MainActivity extends Activity {
             java.util.Set<String> previous = prefs.getStringSet("wifi_ssids", new java.util.HashSet<String>());
             java.util.Set<String> applied = new java.util.HashSet<>();
             String result;
-            try { result = WifiProfiles.apply(MainActivity.this, list, previous, removeOthers, applied,
-                prefs.getStringSet("wifi_qr_ssids", new java.util.HashSet<String>())); }
+            // Nooit weghalen: netwerken via een wifi-QR-code en die uit EventVOX
+            java.util.Set<String> keep = new java.util.HashSet<>(prefs.getStringSet("wifi_qr_ssids", new java.util.HashSet<String>()));
+            keep.addAll(prefs.getStringSet("wifi_ev_ssids", new java.util.HashSet<String>()));
+            try { result = WifiProfiles.apply(MainActivity.this, list, previous, removeOthers, applied, keep); }
             catch (Exception ex) { result = "fout: " + ex.getMessage(); }
             WifiProfiles.lockdown(MainActivity.this, dpm, admin, lockdown);
             prefs.edit().putStringSet("wifi_ssids", applied)
                 .putString("wifi_result", result + " (" + new java.text.SimpleDateFormat("d-M HH:mm").format(new java.util.Date()) + ")").apply();
+        }}).start();
+    }
+
+    /*
+     * Wifi-netwerken uit EventVOX (beheerd in de admin-tenant, voor alle of gekozen organisaties). De backend stuurt ze
+     * alleen als de versie anders is dan die wij melden (wifi_version in getStatus). Alleen de netwerken die eerder uit
+     * EventVOX kwamen worden weggehaald; die uit het config-bestand of een wifi-QR-code blijven. Nooit wachtwoorden in
+     * het logboek of de status.
+     */
+    boolean eventvoxWifiBusy = false;
+
+    void applyEventvoxWifi(String json) {
+        final String version;
+        final java.util.List<WifiProfiles.Profile> list = new java.util.ArrayList<>();
+        try {
+            JSONObject o = new JSONObject(json);
+            version = o.getString("version");
+            if (!version.matches("[0-9a-f]{16}") || version.equals(prefs.getString("wifi_ev_version", "")) || eventvoxWifiBusy) return;
+            JSONArray nets = o.optJSONArray("networks");
+            for (int i = 0; nets != null && i < nets.length() && i < WifiProfiles.MAX; i++) {
+                JSONObject n = nets.getJSONObject(i);
+                WifiProfiles.Profile w = new WifiProfiles.Profile();
+                w.ssid = n.optString("ssid", "").trim();
+                w.password = n.optString("password", "");
+                w.security = n.optString("security", "WPA");
+                w.hidden = n.optBoolean("hidden", false);
+                w.priority = n.optInt("priority", 0);
+                if (!w.ssid.isEmpty() && w.security.matches("WPA|WEP|OPEN")) list.add(w);
+            }
+        } catch (Exception e) { return; }
+        if (!isOwner()) {
+            prefs.edit().putString("wifi_ev_result", "Niet gezet: de app is geen device owner").apply();
+            return; // versie niet opslaan: als device owner wordt het opnieuw geprobeerd
+        }
+        eventvoxWifiBusy = true;
+        new Thread(new Runnable() { public void run() {
+            java.util.Set<String> previous = prefs.getStringSet("wifi_ev_ssids", new java.util.HashSet<String>());
+            java.util.Set<String> keep = new java.util.HashSet<>(prefs.getStringSet("wifi_qr_ssids", new java.util.HashSet<String>()));
+            keep.addAll(prefs.getStringSet("wifi_ssids", new java.util.HashSet<String>()));
+            java.util.Set<String> applied = new java.util.HashSet<>();
+            String result;
+            try { result = WifiProfiles.apply(MainActivity.this, list, previous, false, applied, keep); }
+            catch (Exception ex) { result = "fout: " + ex.getMessage(); }
+            String names = applied.isEmpty() ? "" : " (" + android.text.TextUtils.join(", ", new java.util.TreeSet<>(applied)) + ")";
+            prefs.edit().putStringSet("wifi_ev_ssids", applied).putString("wifi_ev_version", version)
+                .putString("wifi_ev_result", (list.isEmpty() ? "Geen netwerken uit EventVOX" : result) + names).commit();
+            KioskLog.add(MainActivity.this, "Wifi uit EventVOX: " + result + names);
+            eventvoxWifiBusy = false;
         }}).start();
     }
 
@@ -934,6 +986,10 @@ public class MainActivity extends Activity {
             o.put("settings_version", prefs.getInt("remote_settings_version", 0));
             o.put("command_done", prefs.getInt("last_command_id", 0));
             o.put("orientation", prefs.getString("orientation", "portrait"));
+            // Ook leeg: zo weet EventVOX dat deze versie wifi-netwerken kan ontvangen
+            o.put("wifi_version", prefs.getString("wifi_ev_version", ""));
+            String wr = prefs.getString("wifi_ev_result", "");
+            if (!wr.isEmpty()) o.put("wifi_result", wr);
             if (findMe.foundLocation != null && System.currentTimeMillis() - findMe.foundLocationAt < FindMe.LOCATION_SEND_MS) o.put("location", findMe.foundLocation);
             JSONObject w = wifiJson();
             w.remove("enabled");
@@ -1579,7 +1635,9 @@ public class MainActivity extends Activity {
     String wifiStatus() {
         java.util.Set<String> qr = prefs.getStringSet("wifi_qr_ssids", null);
         String viaQr = qr == null || qr.isEmpty() ? "" : " Via QR-code toegevoegd: " + android.text.TextUtils.join(", ", new java.util.TreeSet<>(qr)) + ".";
-        return wifiStatusConfig() + viaQr;
+        java.util.Set<String> ev = prefs.getStringSet("wifi_ev_ssids", null);
+        String viaEv = ev == null || ev.isEmpty() ? "" : " Uit EventVOX: " + android.text.TextUtils.join(", ", new java.util.TreeSet<>(ev)) + ".";
+        return wifiStatusConfig() + viaEv + viaQr;
     }
 
     String wifiStatusConfig() {

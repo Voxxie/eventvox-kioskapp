@@ -156,6 +156,14 @@ het scherm open opent het ook (alleen offline).
   toch geen wifi-code, dan gaan ze alsnog door. Na een pauze van meer dan 0,1 s gaat alles direct door (een mens typt
   trager dan een scanner). `wifi_qr=false` zet het uit.
 
+### Wifi uit EventVOX
+
+In EventVOX (admin-tenant: **Platform → Alle terminals → Wifi-netwerken voor de terminals**) beheer je netwerken voor
+alle organisaties of voor gekozen organisaties. Een terminal met deze app neemt ze binnen een minuut over (als device
+owner) en haalt een netwerk weg als het in EventVOX verwijderd wordt. Netwerken uit `webkiosk.properties` of van een
+wifi-QR-code blijven staan. Het beheerscherm (Netwerk) en de kaart van de terminal in EventVOX tonen welke netwerken uit
+EventVOX komen. Wachtwoorden staan nooit in het logboek of de status.
+
 ## Serienummer in de URL
 Standaard-URL: `https://eventvox.nl/scanterminal?serial={serial}`
 `{serial}` wordt vervangen door het serienummer van het toestel (`{model}` door het model). Eindigt de URL op `serial=`,

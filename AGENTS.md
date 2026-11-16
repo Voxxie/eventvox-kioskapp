@@ -108,11 +108,12 @@ de frontend toont "Kiosk-app" (`kioskAppText`).
 | `getWifi()` | JSON `{ connected, enabled, level 0-4, rssi, ssid?, link_speed, frequency }` |
 | `getSerial()`, `getDeviceInfo()` | serienummer; JSON `{ serial, model, manufacturer, android, sdk, build, appVersion }` |
 | `vibrate(pattern)` | trillen (JSON-array of getal, zoals `navigator.vibrate`) |
-| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, nfc_restarts, clock_skew_s, settings_version, command_done, orientation, wifi, update { checked_at, result }, location?, log? }`; `location` `{ lat, lon, accuracy_m, provider, at, wifi { ssid, bssid, rssi } }` alleen in de 10 minuten na Zoek mij; `log` alleen de eerste keer na `requestDiagnostics()` |
+| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, nfc_restarts, clock_skew_s, settings_version, command_done, orientation, wifi, wifi_version (altijd, ook leeg: de backend stuurt `kiosk_wifi` alleen als dit veld er is), wifi_result?, update { checked_at, result }, location?, log? }`; `location` `{ lat, lon, accuracy_m, provider, at, wifi { ssid, bssid, rssi } }` alleen in de 10 minuten na Zoek mij; `log` alleen de eerste keer na `requestDiagnostics()` |
 | `requestDiagnostics()` | het logboek gaat mee met de volgende `getStatus()` |
 | `command(json)` | opdracht uit EventVOX `{ id, command: reload\|restart\|update\|locate }`; elke id één keer (`last_command_id`), gemeld als `command_done` in `getStatus()` |
 | `applySettings(json)` | instellingen uit EventVOX `{ version, values }`; elke versie één keer, via `applySetting()` (nooit `url`, `pin`, `update_url`) |
 | `setAdminKey(hex)` | sleutel van beheer-QR-codes (64 hex), versleuteld in `TokenVault` |
+| `setWifiProfiles(json)` | wifi-netwerken uit EventVOX (admin-tenant) `{ version, networks: [{ ssid, security WPA\|WEP\|OPEN, password, hidden, priority }] }`; alleen een andere versie, alleen als device owner; haalt alleen eerder uit EventVOX gekregen netwerken weg (`wifi_ev_ssids`), nooit die uit het config-bestand of een wifi-QR-code |
 
 **Events** op `window`: `webkiosk-nfc` `{ uid, uidHex, techs, ndef: [{type, value}] }`, `webkiosk-scan`
 `{ data, symbology }`, `webkiosk-battery` (zoals `getBattery`), `webkiosk-wifi` (zoals `getWifi`); ook als functies
@@ -129,7 +130,7 @@ de scanterminal hoeft niets van de app te weten. Codes die met `WIFI:` of `EVXAD
 **Backend-velden die hiervan afhangen** (Voxxie/eventvox-backend, `Helpers\Terminals`): heartbeat `battery`,
 `battery_pack` (migratie 130), `kiosk_status` + `log` en antwoord `kiosk_diagnostics` (migratie 131), antwoord
 `kiosk_command`, `kiosk_settings` en `kiosk_admin_key` (migratie 132; de scanterminal geeft ze door aan `command()`,
-`applySettings()` en `setAdminKey()`); de backend
+`applySettings()` en `setAdminKey()`), `kiosk_wifi` (migratie 135, `setWifiProfiles()`); de backend
 laat onbekende velden en foute waarden vallen, nooit een fout. Een veld toevoegen aan `getStatus()`: eerst in
 `Terminals::kioskStatus()` (anders wordt het weggegooid), dan in de frontend tonen.
 
