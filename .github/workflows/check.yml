@@ -1,0 +1,37 @@
+name: Controle
+
+# Bij elke push en pull request: de APK bouwen (met een tijdelijke sleutel, niet de echte), pakketnaam, versie en
+# toestemmingen controleren, de Java-test zonder Android en het beheer- en netwerkscherm in Chromium (tests/run.sh).
+# Lokaal hetzelfde: tests/run.sh
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build-tools installeren
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq aapt apksigner zipalign android-sdk-platform-23 dalvik-exchange unzip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Playwright met Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Controles
+        run: tests/run.sh

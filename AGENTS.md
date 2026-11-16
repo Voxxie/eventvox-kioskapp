@@ -156,7 +156,8 @@ in), dan vervalt de kopie. Verander die sleutelnaam nooit zonder de frontend mee
 ## Testen
 
 Er is hier geen toestel of emulator; wat in Android zelf gebeurt, wordt op een echte TC51 getest (zeg dat eerlijk).
-Wel te testen:
+Wel te testen, en **`tests/run.sh` doet dat allemaal** (ook in CI, `.github/workflows/check.yml`, bij elke push en
+pull request; houd hem groen en breid hem uit bij nieuw gedrag):
 - **Bouwen**: `./build.sh` (met een tijdelijke keystore), en `aapt dump badging` voor versie, rechten en naam.
 - **Pure Java** (bv. `WifiProfiles.parseQr`): compileren met `android.jar` op het classpath en draaien met `java`,
   zolang de code geen Android-methoden aanroept.

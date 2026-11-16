@@ -5,3 +5,4 @@ app/build/
 *.apk
 # ondertekeningssleutel niet in git: apart en veilig bewaren
 *.keystore
+node_modules/

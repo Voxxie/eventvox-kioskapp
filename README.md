@@ -204,6 +204,13 @@ JSON.parse(WebKiosk.getDeviceInfo());    // { serial, model, manufacturer, andro
 ## Opnieuw bouwen
 `sudo apt install aapt apksigner zipalign android-sdk-platform-23 dalvik-exchange default-jdk && ./build.sh`
 
+## Controle bij elke wijziging
+
+Bij elke push en pull request bouwt GitHub (Actions › *Controle*) de app met een tijdelijke sleutel en controleert
+pakketnaam, versie en toestemmingen, de wifi-QR-herkenning en het beheer- en netwerkscherm in een browser. Lokaal:
+`tests/run.sh` (build-tools zoals bij *Opnieuw bouwen*, plus Node en Playwright met Chromium). Wat Android zelf doet
+(NFC, scanner, device owner) wordt alleen op een echte TC51 getest.
+
 ## Automatische updates
 Bij elke release maakt de workflow ook een `update.json` (versie, download-URL, SHA-256, release-notes).
 De app controleert die **1 minuut na het starten** en wanneer je in het beheermenu op *Nu controleren* tikt
