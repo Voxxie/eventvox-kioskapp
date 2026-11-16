@@ -275,6 +275,10 @@ Op de terminalpagina (kaart Kiosk-app) en voor een selectie in de terminallijst:
   EventVOX worden één keer toegepast; wie daarna op het toestel iets wijzigt, houdt dat tot EventVOX opnieuw iets stuurt.
 - **Beheer-QR-code** (knop op de terminalspagina): opent het beheerscherm zonder PIN, 1 uur tot 1 week geldig, ook
   zonder netwerk. *Alle beheer-QR-codes intrekken* maakt eerdere codes ongeldig.
+- **Versies**: in de terminallijst krijgt een terminal met een oudere app dan de nieuwste van zijn kanaal een oranje
+  label (*App 0.0.12*); bovenaan staat hoeveel het er zijn, met **Alle bijwerken** (de opdracht *Nu bijwerken* naar
+  al die terminals). De nieuwste versie haalt EventVOX elk uur bij GitHub op.
+- **Inricht-QR-code** (alleen in de admin-tenant): zie *Inrichten met een QR-code* hierboven.
 
 ## Testkanaal
 Zet één of twee toestellen op **Test** (beheerscherm > Updates, of `update_channel=beta`). Markeer een nieuwe release op
