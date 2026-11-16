@@ -152,7 +152,7 @@ details[open] summary { margin-bottom: 10px; }
 
 /* Snelle acties */
 .quick { display: grid; grid-template-columns: repeat(3, 1fr); grid-gap: 8px; margin-bottom: 14px; }
-.qbtn { background: #f1ecf4; color: var(--purple); border-radius: 14px; padding: 12px 6px 10px; font-size: 12.5px; font-weight: 600; line-height: 1.25;
+.qbtn { background: #f6f2f8; color: var(--purple); border: 1.5px solid #d9c9e3; border-radius: 14px; padding: 12px 6px 10px; font-size: 12.5px; font-weight: 600; line-height: 1.25;
   display: flex; flex-direction: column; align-items: center; text-align: center; }
 .qbtn span { font-size: 20px; line-height: 1; margin-bottom: 6px; }
 .qbtn:active { background: #e6dcee; }
