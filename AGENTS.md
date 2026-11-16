@@ -66,6 +66,7 @@ De hulpklassen (`NetworkScreen`, `AdminScreen`, `FindMe`) krijgen de Activity me
 | `AdminScreen.java` | Beheerscherm (`AdminBridge`, `adminState()`, `applySetting()`, `adminAction()`) en beheer-QR-codes. |
 | `FindMe.java` | Zoek mij en de locatie daarbij. |
 | `Battery.java` / `Scripts.java` | Accu als JSON (met Zebra-accu); de JavaScript die de app in de pagina zet (batterij, trillen). |
+| `AdminReceiver.java` | Device admin; na inrichten met een QR-code (frontend admin-tenant, `provisionQrText`) de admin extras bewaren, toegepast door `applyProvisionExtras()`. Het handtekening-checksum in die QR-code is de SHA-256 van het certificaat: nog een reden om de keystore nooit te wisselen. |
 | `Updater.java` / `UpdateReceiver.java` | `update.json` ophalen (redirects zelf volgen), APK downloaden + SHA-256, stil installeren (device owner) of via Android; herstart na `MY_PACKAGE_REPLACED`. |
 | `WifiProfiles.java` | Wifi uit `webkiosk.properties`, wifi-QR-codes (`parseQr`), toevoegen/verbinden, netwerken in de buurt. |
 | `DataWedge.java` | Eigen DataWedge-profiel "EventVOX-Webkiosk" (scanner aan, toetsaanslagen uit, scan als intent `nl.webkiosk.SCAN`). |

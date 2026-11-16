@@ -22,6 +22,18 @@ en is (als *device owner*) niet te verlaten door de gebruiker. Geen licenties of
 2. Sla bij de eerste setup het Google-account over; verbind wel met wifi.
 3. Instellingen > Over de telefoon > 7x op *Build-nummer* tikken → Ontwikkelaarsopties → **USB-foutopsporing** aan.
 
+## Inrichten met een QR-code (zonder USB)
+
+In EventVOX, in de **admin-tenant**: *Terminals › Inricht-QR-code*. Vul het wifi-netwerk in (en desgewenst website-adres,
+PIN en updatekanaal) en print de code. Dan per toestel: fabrieksreset, op het welkomstscherm **6 keer op dezelfde plek
+tikken**, de code scannen. Android verbindt met de wifi, downloadt de nieuwste `webkiosk.apk`, controleert de handtekening
+en maakt de app device owner; de app neemt adres, PIN en kanaal één keer over (logboek: *Ingericht met een QR-code*).
+
+- Werkt vanaf **Android 7**; een TC51 met Android 6 richt je in met USB (hieronder).
+- De Zebra-apps (DataWedge) blijven aan. Of de TC51-firmware het inrichten met een QR-code ondersteunt, moet op een
+  toestel getest worden; lukt het niet, gebruik dan USB of StageNow.
+- De code bevat het wifi-wachtwoord en de PIN: bewaar de afdruk niet zichtbaar.
+
 ## Inrichten (meerdere tegelijk)
 0. Download `webkiosk-<versie>.zip` bij de [nieuwste release](../../releases/latest) en pak hem uit (bevat APK, scripts en config).
 1. Controleer de URL in `webkiosk.properties` (standaard eventvox scanterminal met serienummer).
