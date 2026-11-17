@@ -16,7 +16,16 @@ goto :eof
 
 :setup
 echo === %1 ===
-adb -s %1 install -r webkiosk.apk
+REM Play Protect controleert installaties via USB en blokkeert een app die niet uit de Play Store komt: alleen tijdens
+REM het installeren uit (verifier_verify_adb_installs), daarna de oude stand terug. Play Protect zelf blijft aan.
+set "OLDVERIFY="
+for /f "delims=" %%v in ('adb -s %1 shell settings get global verifier_verify_adb_installs') do set "OLDVERIFY=%%v"
+adb -s %1 shell settings put global verifier_verify_adb_installs 0
+adb -s %1 install -r webkiosk.apk || (
+  echo !! Installeren mislukt op %1. Staat Play Protect een melding te tonen op het toestel? Kies dan 'Toch installeren',
+  echo    of zet in de Play Store ^> Play Protect ^> instellingen 'Apps scannen' tijdelijk uit en start dit script opnieuw.
+)
+if "%OLDVERIFY%"=="" (adb -s %1 shell settings delete global verifier_verify_adb_installs >nul) else if "%OLDVERIFY%"=="null" (adb -s %1 shell settings delete global verifier_verify_adb_installs >nul) else (adb -s %1 shell settings put global verifier_verify_adb_installs %OLDVERIFY%)
 adb -s %1 push webkiosk.properties /sdcard/webkiosk.properties
 adb -s %1 shell dpm set-device-owner nl.webkiosk/.AdminReceiver || echo !! Device owner mislukt op %1: verwijder eerst alle accounts of doe een fabrieksreset.
 adb -s %1 shell am start -n nl.webkiosk/.MainActivity

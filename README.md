@@ -44,6 +44,9 @@ en maakt de app device owner; de app neemt adres, PIN en kanaal één keer over 
 Het script installeert de app, zet de config op `/sdcard/webkiosk.properties`, maakt de app device owner en start hem.
 Daarna: statusbalk uit, home/recent-knoppen werken niet, de app start na een herstart vanzelf, schermvergrendeling uit.
 USB-foutopsporing kun je daarna weer uitzetten.
+Play Protect hoeft niet uit: het script zet alleen de controle van installaties via USB tijdens het installeren uit
+(`verifier_verify_adb_installs`) en daarna terug. Toont het toestel toch een melding van Play Protect, kies dan *Toch
+installeren*, of zet in de Play Store > Play Protect > instellingen *Apps scannen* tijdelijk uit en start het script opnieuw.
 
 ## Beheerscherm op het toestel
 Tik **10x snel op dezelfde plek** en voer de PIN in (of scan een beheer-QR-code). Het beheerscherm opent op een

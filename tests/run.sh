@@ -42,3 +42,7 @@ node --check "$ROOT/app/assets/admin.js"
 node --check "$ROOT/app/assets/wifi.js"
 node --test "$ROOT/tests/assets.test.mjs"
 node --test "$ROOT/tests/scripts.test.mjs"
+
+echo "== Inrichten via USB (provision.sh, nagebootste adb)"
+bash -n "$ROOT/provision.sh"
+bash "$ROOT/tests/provision.test.sh"
