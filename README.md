@@ -190,6 +190,12 @@ uitslag aan (1× kort toegelaten, 2× kort waarschuwing, 3× lang geweigerd); in
 want die trilt alleen na een tik op de pagina, en een scan met DataWedge of NFC is geen tik. Uit te zetten met
 `vibrate=false` of in het beheerscherm (Scanner), met testknoppen voor de drie patronen.
 
+## Wit scherm na de slaapstand
+Komt het toestel uit de slaapstand (scherm aan, ontgrendelen, of terug na meer dan een minuut), dan controleert de app of
+de pagina nog leeft. Antwoordt die niet binnen 3 seconden, of is hij leeg, dan laadt de app de website opnieuw (zoals na
+een crash; niet verstuurde scans bewaart de scanterminal zelf). In het logboek staat dan *Herladen: pagina reageert niet
+na slaapstand*. Bij elke start staat ook de versie van de WebView in het logboek.
+
 ## Zebra CC600 / CC6000 (zonder accu, met netwerkkabel)
 De app werkt ook op de kiosk-toestellen voor op de balie. Die hebben geen accu: de app meldt dan *geen accu*
 (`present: false`), dus de scanterminal en EventVOX tonen geen accu. Heeft het toestel internet via de netwerkkabel,

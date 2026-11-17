@@ -138,6 +138,7 @@ public class MainActivity extends Activity {
         handler.postDelayed(dimCheck, 15000);
         handler.postDelayed(clockCheck, 20000);
         KioskLog.add(this, "App gestart, versie " + appVersion() + (isOwner() ? "" : " (geen device owner)"));
+        KioskLog.add(this, "WebView: " + webViewVersion());
     }
 
     /** De WebView van de website, met alles wat de app eraan toevoegt (opnieuw gemaakt na een crash) */
@@ -516,11 +517,13 @@ public class MainActivity extends Activity {
         hideSystemUi();
         enterKiosk();
         restartNfc("onResume");
+        if (pausedAt > 0 && SystemClock.uptimeMillis() - pausedAt > 60000) scheduleWakeCheck();
         schedulePeriodicNfcRefresh();
     }
 
     @Override protected void onPause() {
         resumed = false;
+        pausedAt = SystemClock.uptimeMillis();
         handler.removeCallbacks(nfcRestart);
         handler.removeCallbacks(nfcPeriodic);
         if (nfc != null) try { nfc.disableReaderMode(this); } catch (Exception ignored) {}
@@ -684,8 +687,10 @@ public class MainActivity extends Activity {
                 if (i.getIntExtra(NfcAdapter.EXTRA_ADAPTER_STATE, 0) == NfcAdapter.STATE_ON) restartNfc("NFC aan");
             } else if (Intent.ACTION_SCREEN_ON.equals(a)) {
                 restartNfc("scherm aan");
+                scheduleWakeCheck();
             } else if (Intent.ACTION_USER_PRESENT.equals(a)) {
                 restartNfc("ontgrendeld");
+                scheduleWakeCheck();
             }
         }
     };
@@ -834,6 +839,74 @@ public class MainActivity extends Activity {
                 + "if(typeof window.onWebKioskWifi==='function')window.onWebKioskWifi(d);})(" + w + ");", null);
         }
     };
+
+    // ---------- na de slaapstand: leeft de pagina nog? ----------
+
+    /*
+     * Soms bleef het scherm na een tijd slaapstand wit. Bij scherm aan, ontgrendelen en terug na meer dan een minuut:
+     * de pagina een teken van leven vragen. Geen antwoord binnen 3 s, of een lege pagina: een nieuwe WebView met de
+     * website (zoals na een crash; de scanterminal bewaart zijn wachtrij zelf). Wel antwoord: alleen opnieuw tekenen.
+     */
+    long pausedAt = 0;
+    long lastWakeCheck = 0;
+
+    void scheduleWakeCheck() {
+        long now = SystemClock.uptimeMillis();
+        if (now - lastWakeCheck < 5000) return;
+        lastWakeCheck = now;
+        handler.postDelayed(new Runnable() { public void run() { wakeCheck(); } }, 800);
+    }
+
+    void wakeCheck() {
+        final WebView w = web;
+        if (w == null || adminView != null) return;
+        final boolean[] answered = {false};
+        final Runnable noAnswer = new Runnable() {
+            public void run() {
+                if (answered[0] || w != web) return;
+                rebuildWeb("pagina reageert niet na slaapstand", false);
+            }
+        };
+        handler.postDelayed(noAnswer, 3000);
+        try {
+            w.evaluateJavascript("(function(){var b=document.body;return document.readyState+'|'+(b?b.childElementCount:0);})()",
+                new ValueCallback<String>() {
+                    public void onReceiveValue(String v) {
+                        answered[0] = true;
+                        handler.removeCallbacks(noAnswer);
+                        if (w != web) return;
+                        String s = v == null ? "" : v.replace("\"", "");
+                        if (s.equals("complete|0")) {
+                            rebuildWeb("lege pagina na slaapstand", false);
+                        } else {
+                            w.invalidate(); // het beeld opnieuw laten tekenen
+                            w.requestLayout();
+                        }
+                    }
+                });
+        } catch (Exception e) {
+            handler.removeCallbacks(noAnswer);
+            rebuildWeb("pagina reageert niet na slaapstand", false);
+        }
+    }
+
+    /** Welke WebView de app gebruikt (pakket en versie), voor het logboek: verandert die, dan staat dat in de Diagnose */
+    String webViewVersion() {
+        try {
+            if (Build.VERSION.SDK_INT >= 26) {
+                Object info = WebView.class.getMethod("getCurrentWebViewPackage").invoke(null);
+                if (info instanceof android.content.pm.PackageInfo) {
+                    android.content.pm.PackageInfo p = (android.content.pm.PackageInfo) info;
+                    return p.packageName + " " + p.versionName;
+                }
+            }
+            String ua = WebSettings.getDefaultUserAgent(this);
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("Chrome/([0-9.]+)").matcher(ua);
+            return m.find() ? "Chrome " + m.group(1) : "onbekend";
+        } catch (Exception e) {
+            return "onbekend";
+        }
+    }
 
     // ---------- herstel na een crash van de pagina ----------
 

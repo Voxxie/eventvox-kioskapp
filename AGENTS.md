@@ -151,6 +151,9 @@ in), dan vervalt de kopie. Verander die sleutelnaam nooit zonder de frontend mee
   anders in volgorde doorgestuurd.
 - NFC na slaapstand: reader mode opnieuw bij scherm aan, ontgrendelen, focus en NFC aan (+ tweede poging na 1,5 s).
 - Crash van de pagina (`onRenderProcessGone`): nieuwe WebView; 3× binnen een minuut: 30 s wachten.
+- Na de slaapstand (scherm aan, ontgrendelen, terug na > 1 min): `wakeCheck()` vraagt de pagina een teken van leven; geen
+  antwoord binnen 3 s of een lege pagina: nieuwe WebView, anders alleen opnieuw tekenen (tegen een wit scherm). Bij
+  het starten staat de WebView-versie in het logboek.
 - Nachtelijk herladen (standaard 04:00–07:00, alleen na 5 min rust), volume vast (standaard uit; aan: volumeknoppen afgevangen in
   `dispatchKeyEvent` en elke volumewijziging teruggezet; **nooit** `DISALLOW_ADJUST_VOLUME`: dat dempt het hoofdvolume),
   dimmen (alleen met "scherm altijd aan", na 2 min naar 15%).
