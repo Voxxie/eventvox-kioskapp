@@ -208,7 +208,8 @@ public class MainActivity extends Activity {
             /** pattern: JSON-array in ms (aan, uit, aan, ...) of één getal; [] of 0 stopt het trillen. */
             @JavascriptInterface public boolean vibrate(String pattern) { return doVibrate(pattern); }
             /** De wifi-verbinding: { connected, level 0-4, rssi (dBm), ssid?, link_speed (Mbps), frequency (MHz) } */
-            @JavascriptInterface public String getWifi() { return wifiJson().toString(); }
+            /** Wifi; null als het toestel via de netwerkkabel internet heeft (zoals EventVOX-Pi): geen "geen wifi" in de terminal */
+            @JavascriptInterface public String getWifi() { return "ethernet".equals(uplink()) ? "null" : wifiJson().toString(); }
             /** De staat van de app voor de heartbeat (EventVOX: terminalpagina); met log als om een diagnose is gevraagd */
             @JavascriptInterface public String getStatus() { return statusJson().toString(); }
             /** EventVOX vraagt een diagnose: het logboek gaat mee met de volgende getStatus() */
@@ -770,6 +771,40 @@ public class MainActivity extends Activity {
         return o;
     }
 
+    /** De netwerkkabel (zoals een Zebra CC600): { connected, speed_mbps? }; null als het toestel geen netwerkpoort heeft */
+    @SuppressWarnings("deprecation")
+    JSONObject ethernetJson() {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            android.net.NetworkInfo ni = cm == null ? null : cm.getNetworkInfo(android.net.ConnectivityManager.TYPE_ETHERNET);
+            if (ni == null) return null;
+            JSONObject o = new JSONObject();
+            o.put("connected", ni.isConnected());
+            if (ni.isConnected()) {
+                try (BufferedReader r = new BufferedReader(new FileReader("/sys/class/net/eth0/speed"))) {
+                    int speed = Integer.parseInt(r.readLine().trim());
+                    if (speed > 0) o.put("speed_mbps", speed);
+                } catch (Exception ignored) {}
+            }
+            return o;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Waarover het toestel nu internet heeft: "ethernet", "wifi" of null (geen, of iets anders zoals mobiel) */
+    @SuppressWarnings("deprecation")
+    String uplink() {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            android.net.NetworkInfo ni = cm == null ? null : cm.getActiveNetworkInfo();
+            if (ni == null || !ni.isConnected()) return null;
+            if (ni.getType() == android.net.ConnectivityManager.TYPE_ETHERNET) return "ethernet";
+            if (ni.getType() == android.net.ConnectivityManager.TYPE_WIFI) return "wifi";
+        } catch (Exception ignored) {}
+        return null;
+    }
+
     String lastWifiSig = "";
     final BroadcastReceiver wifiReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
@@ -777,6 +812,8 @@ public class MainActivity extends Activity {
             // Alleen bij een andere stand, niet bij elke dBm: anders tientallen events per minuut
             String sig = w.optBoolean("connected") + "|" + w.optInt("level", -1) + "|" + w.optString("ssid");
             if (web == null || sig.equals(lastWifiSig)) return;
+            // Via de netwerkkabel: wifi doet er niet toe (geen "geen wifi" in de terminal)
+            if ("ethernet".equals(uplink())) { lastWifiSig = sig; return; }
             lastWifiSig = sig;
             KioskLog.add(MainActivity.this, w.optBoolean("connected") ? "Wifi verbonden" + (w.has("ssid") ? " met " + w.optString("ssid") : "")
                 + ", niveau " + w.optInt("level") + " (" + w.optInt("rssi") + " dBm)" : "Wifi niet verbonden");
@@ -994,6 +1031,11 @@ public class MainActivity extends Activity {
             JSONObject w = wifiJson();
             w.remove("enabled");
             o.put("wifi", w);
+            // De netwerkkabel en waarover het toestel internet heeft (zoals EventVOX-Pi)
+            JSONObject eth = ethernetJson();
+            if (eth != null) o.put("ethernet", eth);
+            String up = uplink();
+            if (up != null) o.put("uplink", up);
             JSONObject u = new JSONObject();
             long checked = prefs.getLong("update_last_check", 0);
             if (checked > 0) u.put("checked_at", iso(checked));

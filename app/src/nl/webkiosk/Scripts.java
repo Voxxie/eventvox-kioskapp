@@ -41,7 +41,8 @@ final class Scripts {
     /**
      * Battery Status API op basis van Android's BatteryManager (via WebKiosk.getBattery), ook als de WebView hem niet heeft.
      * Altijd deze (niet de eventuele eigen van de WebView): chargingTime blijft Infinity (onbekend), zodat een volle,
-     * ladende accu niet lijkt op een toestel zonder accu (zo herkent de EventVOX-scanterminal een Raspberry Pi).
+     * ladende accu niet lijkt op een toestel zonder accu (zo herkent de EventVOX-scanterminal een Raspberry Pi). Meldt de app
+     * present false (geen accu, zoals een Zebra CC600), dan juist wél zoals een toestel zonder accu: vol, laden, chargingTime 0.
      * Wordt zo vroeg mogelijk in elke pagina gezet (onPageStarted/onPageCommitVisible) en nogmaals bij onPageFinished.
      */
     static final String BATTERY_POLYFILL =
@@ -55,8 +56,9 @@ final class Scripts {
           + "dispatchEvent:function(e){this._fire(e.type);return true;},"
           + "_fire:function(t){var e={type:t,target:bm,currentTarget:bm};(this._l[t]||[]).slice().forEach(function(f){try{f.call(bm,e);}catch(x){}});"
           + "if(typeof this['on'+t]==='function')try{this['on'+t](e);}catch(x){}}};"
-          + "function upd(d){if(!d||typeof d.level!=='number')return;var l=d.level/100,c=!!d.charging,lc=l!==bm.level,cc=c!==bm.charging;"
-          + "bm.level=l;bm.charging=c;if(lc)bm._fire('levelchange');if(cc){bm._fire('chargingchange');bm._fire('chargingtimechange');}}"
+          + "function upd(d){if(!d||typeof d.level!=='number')return;var np=d.present===false;var l=np?1:d.level/100,c=np?true:!!d.charging,lc=l!==bm.level,cc=c!==bm.charging;"
+          // Geen accu (present false, bv. een Zebra CC600): zoals een toestel zonder accu, chargingTime 0
+          + "bm.chargingTime=np?0:Infinity;bm.level=l;bm.charging=c;if(lc)bm._fire('levelchange');if(cc){bm._fire('chargingchange');bm._fire('chargingtimechange');}}"
           + "upd(rd());"
           + "window.addEventListener('webkiosk-battery',function(e){upd(e.detail);});"
           + "var gb=function(){return Promise.resolve(bm);};"

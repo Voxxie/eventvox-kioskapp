@@ -104,11 +104,11 @@ de frontend toont "Kiosk-app" (`kioskAppText`).
 | Methode | Geeft |
 |---|---|
 | `nfcAvailable()`, `nfcEnabled()` | boolean |
-| `getBattery()` | JSON `{ level, charging, full, plugged, health, temperature, voltage, technology, pack?, raw }`; `pack` = Zebra-accu `{ percent, cycles, decommission, serial, part_number, manufactured, rated_capacity }` |
-| `getWifi()` | JSON `{ connected, enabled, level 0-4, rssi, ssid?, link_speed, frequency }` |
+| `getBattery()` | JSON `{ present, level, charging, full, plugged, health, temperature, voltage, technology, pack?, raw }`; `present` false: geen accu (Zebra CC600/CC6000, `Battery.noBatteryModel()`), dan alleen `{ present, level 100, charging, full, plugged }` en `navigator.getBattery()` zoals een toestel zonder accu (`chargingTime` 0); `pack` = Zebra-accu `{ percent, cycles, decommission, serial, part_number, manufactured, rated_capacity }` |
+| `getWifi()` | JSON `{ connected, enabled, level 0-4, rssi, ssid?, link_speed, frequency }`; `null` als het toestel via de netwerkkabel internet heeft (zoals EventVOX-Pi), dan ook geen `webkiosk-wifi` |
 | `getSerial()`, `getDeviceInfo()` | serienummer; JSON `{ serial, model, manufacturer, android, sdk, build, appVersion }` |
 | `vibrate(pattern)` | trillen (JSON-array of getal, zoals `navigator.vibrate`) |
-| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, nfc_restarts, clock_skew_s, settings_version, command_done, orientation, wifi, wifi_version (altijd, ook leeg: de backend stuurt `kiosk_wifi` alleen als dit veld er is), wifi_result?, update { checked_at, result }, location?, log? }`; `location` `{ lat, lon, accuracy_m, provider, at, wifi { ssid, bssid, rssi } }` alleen in de 10 minuten na Zoek mij; `log` alleen de eerste keer na `requestDiagnostics()` |
+| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, nfc_restarts, clock_skew_s, settings_version, command_done, orientation, wifi, ethernet? { connected, speed_mbps? } (alleen met een netwerkpoort), uplink? (ethernet|wifi), wifi_version (altijd, ook leeg: de backend stuurt `kiosk_wifi` alleen als dit veld er is), wifi_result?, update { checked_at, result }, location?, log? }`; `location` `{ lat, lon, accuracy_m, provider, at, wifi { ssid, bssid, rssi } }` alleen in de 10 minuten na Zoek mij; `log` alleen de eerste keer na `requestDiagnostics()` |
 | `requestDiagnostics()` | het logboek gaat mee met de volgende `getStatus()` |
 | `command(json)` | opdracht uit EventVOX `{ id, command: reload\|restart\|update\|locate }`; elke id één keer (`last_command_id`), gemeld als `command_done` in `getStatus()` |
 | `applySettings(json)` | instellingen uit EventVOX `{ version, values }`; elke versie één keer, via `applySetting()` (nooit `url`, `pin`, `update_url`) |

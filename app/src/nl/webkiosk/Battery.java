@@ -24,10 +24,29 @@ final class Battery {
 
     static final String[] HEALTH = {"", "unknown", "good", "overheat", "dead", "over_voltage", "failure", "cold"};
 
+    /**
+     * Toestellen zonder accu (aan de netstroom of PoE), zoals de Zebra CC600/CC6000. Android meldt dat meestal met
+     * EXTRA_PRESENT false; sommige firmware meldt toch een "accu" van 100%, daarom ook op model.
+     */
+    static boolean noBatteryModel() {
+        String m = Build.MODEL == null ? "" : Build.MODEL.toUpperCase(java.util.Locale.ROOT);
+        return m.startsWith("CC600") || m.startsWith("CC6000");
+    }
+
     static JSONObject batteryJson(Intent i) {
         JSONObject o = new JSONObject();
         if (i == null) return o;
         try {
+            if (!i.getBooleanExtra(BatteryManager.EXTRA_PRESENT, true) || noBatteryModel()) {
+                // Geen accu: zoals de Battery Status API voor een toestel zonder accu (vol, aan de stroom, geen pack)
+                o.put("present", false);
+                o.put("level", 100);
+                o.put("charging", true);
+                o.put("full", true);
+                o.put("plugged", "ac");
+                return o;
+            }
+            o.put("present", true);
             int level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1), scale = i.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
             int status = i.getIntExtra(BatteryManager.EXTRA_STATUS, -1), plugged = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0);
             int health = i.getIntExtra(BatteryManager.EXTRA_HEALTH, 1);

@@ -187,6 +187,12 @@ uitslag aan (1× kort toegelaten, 2× kort waarschuwing, 3× lang geweigerd); in
 want die trilt alleen na een tik op de pagina, en een scan met DataWedge of NFC is geen tik. Uit te zetten met
 `vibrate=false` of in het beheerscherm (Scanner), met testknoppen voor de drie patronen.
 
+## Zebra CC600 / CC6000 (zonder accu, met netwerkkabel)
+De app werkt ook op de kiosk-toestellen voor op de balie. Die hebben geen accu: de app meldt dan *geen accu*
+(`present: false`), dus de scanterminal en EventVOX tonen geen accu. Heeft het toestel internet via de netwerkkabel,
+dan toont de scanterminal geen wifi-icoon (dus ook geen *geen wifi*), en de terminalpagina in EventVOX de regel
+*Netwerk* (kabel, wifi en waarover hij internet heeft) en in de lijst het label *Kabel*.
+
 ## Accu-slijtage in EventVOX
 Op een Zebra geeft Android extra gegevens over de accu zelf. De app zet die in `WebKiosk.getBattery().pack`
 (gezondheid %, laadcycli, vervangadvies van Zebra, onderdeel- en serienummer, productiedatum, capaciteit; alleen wat het
