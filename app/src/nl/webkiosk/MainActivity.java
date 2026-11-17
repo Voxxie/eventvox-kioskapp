@@ -39,6 +39,7 @@ public class MainActivity extends Activity {
     final Handler handler = new Handler(Looper.getMainLooper());
     final NetworkScreen net = new NetworkScreen(this);
     final FindMe findMe = new FindMe(this);
+    final ScreenRefresh screenRefresh = new ScreenRefresh(this);
     final AdminScreen adminScreen = new AdminScreen(this);
     int tapCount = 0;
     long lastTap = 0;
@@ -741,6 +742,7 @@ public class MainActivity extends Activity {
     }
 
     void deliverNfc(JSONObject o, String kbValue) {
+        if (screenRefresh.view != null) { screenRefresh.stop("gestopt met een NFC-tag"); return; } // niet naar de pagina
         if (nfcTesting && adminView != null) { // test in het beheerscherm: niet aan de website doorgeven
             try { o.put("typed", kbValue); } catch (Exception ignored) {}
             adminScreen.adminEmit("nfc", o);
@@ -1002,6 +1004,7 @@ public class MainActivity extends Activity {
     final Runnable dimCheck = new Runnable() {
         public void run() {
             handler.postDelayed(this, 15000);
+            if (screenRefresh.view != null) return; // tijdens Scherm opfrissen: volle helderheid
             int minutes = prefs.getInt("dim_minutes", 2);
             boolean want = prefs.getBoolean("keep_screen_on", false) && minutes > 0 && adminView == null && net.wifiView == null && findMe.locateView == null
                 && SystemClock.uptimeMillis() - lastActivity > minutes * 60000L;
@@ -1223,6 +1226,7 @@ public class MainActivity extends Activity {
             case "restart": restartApp(); break;
             case "update": updateNow(); break;
             case "locate": findMe.locate(); break;
+            case "refresh_screen": screenRefresh.start(); break;
             default: KioskLog.add(this, "Onbekende opdracht: " + command);
         }
     }
@@ -1326,6 +1330,11 @@ public class MainActivity extends Activity {
         boolean system = k == KeyEvent.KEYCODE_BACK || k == KeyEvent.KEYCODE_HOME || k == KeyEvent.KEYCODE_VOLUME_UP
             || k == KeyEvent.KEYCODE_VOLUME_DOWN || k == KeyEvent.KEYCODE_POWER || k == KeyEvent.KEYCODE_APP_SWITCH;
         markActivity();
+        // Scherm opfrissen: een toets of scan stopt het (en gaat niet naar de pagina)
+        if (screenRefresh.view != null && !system) {
+            if (e.getAction() == KeyEvent.ACTION_UP) screenRefresh.stop("gestopt met een toets of scan");
+            return true;
+        }
         if ((k == KeyEvent.KEYCODE_VOLUME_UP || k == KeyEvent.KEYCODE_VOLUME_DOWN) && volumeLocked()) {
             if (e.getAction() == KeyEvent.ACTION_DOWN) applyVolume(); // vast volume: de knoppen doen niets
             return true;
@@ -1497,6 +1506,7 @@ public class MainActivity extends Activity {
 
     void deliverScan(String data, String symbology) {
         markActivity();
+        if (screenRefresh.view != null) { screenRefresh.stop("gestopt met een scan"); return; } // niet naar de pagina
         if (isAppCode(data)) { handleAppCode(data); return; } // nooit naar de website
         lastScan = data + (symbology.isEmpty() ? "" : " (" + symbology + ")");
         JSONObject o = new JSONObject();
@@ -1512,6 +1522,8 @@ public class MainActivity extends Activity {
 
     /** Typt tekst als echte toetsaanslagen in het actieve invoerveld (zoals DataWedge). */
     void typeText(String text, boolean enter) {
+        // Scherm opfrissen: een scan of NFC-tag stopt het en gaat niet naar de pagina
+        if (screenRefresh.view != null) { screenRefresh.stop("gestopt met een scan"); return; }
         focusWeb();
         KeyCharacterMap km = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD);
         KeyEvent[] evs = km.getEvents(text.toCharArray());

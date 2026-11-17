@@ -196,6 +196,13 @@ De app werkt ook op de kiosk-toestellen voor op de balie. Die hebben geen accu: 
 dan toont de scanterminal een kabel-icoontje in plaats van de wifi-balkjes (dus ook geen *geen wifi*), en de terminalpagina in EventVOX de regel
 *Netwerk* (kabel, wifi en waarover hij internet heeft) en in de lijst het label *Kabel*.
 
+## Scherm opfrissen (tegen een "ingebrand" beeld)
+Een LCD-scherm dat maandenlang hetzelfde toont (zoals een CC600 op de balie), houdt soms een schaduw van dat beeld
+(beeldretentie). In EventVOX geeft de opdracht **Scherm opfrissen** het toestel hoogstens 3 uur lang wisselende kleuren
+(wit, zwart, rood, groen, blauw) op volle helderheid; het scherm blijft zolang aan. Een tik, toets, scan of NFC-tag stopt
+het (die gaat dan niet naar de scanterminal). Vaak is de schaduw daarna weg; anders een paar nachten herhalen. Zet het
+scherm daarnaast niet op de hoogste helderheid en gebruik *Dimmen*.
+
 ## Accu-slijtage in EventVOX
 Op een Zebra geeft Android extra gegevens over de accu zelf. De app zet die in `WebKiosk.getBattery().pack`
 (gezondheid %, laadcycli, vervangadvies van Zebra, onderdeel- en serienummer, productiedatum, capaciteit; alleen wat het
