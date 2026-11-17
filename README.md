@@ -190,7 +190,7 @@ want die trilt alleen na een tik op de pagina, en een scan met DataWedge of NFC 
 ## Zebra CC600 / CC6000 (zonder accu, met netwerkkabel)
 De app werkt ook op de kiosk-toestellen voor op de balie. Die hebben geen accu: de app meldt dan *geen accu*
 (`present: false`), dus de scanterminal en EventVOX tonen geen accu. Heeft het toestel internet via de netwerkkabel,
-dan toont de scanterminal geen wifi-icoon (dus ook geen *geen wifi*), en de terminalpagina in EventVOX de regel
+dan toont de scanterminal een kabel-icoontje in plaats van de wifi-balkjes (dus ook geen *geen wifi*), en de terminalpagina in EventVOX de regel
 *Netwerk* (kabel, wifi en waarover hij internet heeft) en in de lijst het label *Kabel*.
 
 ## Accu-slijtage in EventVOX

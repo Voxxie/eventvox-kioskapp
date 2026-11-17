@@ -210,6 +210,17 @@ public class MainActivity extends Activity {
             /** De wifi-verbinding: { connected, level 0-4, rssi (dBm), ssid?, link_speed (Mbps), frequency (MHz) } */
             /** Wifi; null als het toestel via de netwerkkabel internet heeft (zoals EventVOX-Pi): geen "geen wifi" in de terminal */
             @JavascriptInterface public String getWifi() { return "ethernet".equals(uplink()) ? "null" : wifiJson().toString(); }
+            /** Het netwerk: { uplink: ethernet|wifi|null, ethernet: { connected, speed_mbps? }|null }; de scanterminal toont via de kabel een kabel-icoon */
+            @JavascriptInterface public String getNetwork() {
+                JSONObject o = new JSONObject();
+                try {
+                    String up = uplink();
+                    o.put("uplink", up == null ? JSONObject.NULL : up);
+                    JSONObject eth = ethernetJson();
+                    o.put("ethernet", eth == null ? JSONObject.NULL : eth);
+                } catch (Exception ignored) {}
+                return o.toString();
+            }
             /** De staat van de app voor de heartbeat (EventVOX: terminalpagina); met log als om een diagnose is gevraagd */
             @JavascriptInterface public String getStatus() { return statusJson().toString(); }
             /** EventVOX vraagt een diagnose: het logboek gaat mee met de volgende getStatus() */
