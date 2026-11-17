@@ -993,6 +993,29 @@ public class MainActivity extends Activity {
         if (dimmed) runOnUiThread(new Runnable() { public void run() { setBrightness(-1f); } });
     }
 
+    /**
+     * Het scherm aanzetten en aan houden (ms), ook als het toestel in slaap was: voor Zoek mij en Scherm opfrissen. Zonder
+     * dit liepen die met het scherm uit (piepen wel, maar een zwart scherm).
+     */
+    PowerManager.WakeLock screenWake;
+    @SuppressWarnings("deprecation")
+    void wakeScreen(long ms) {
+        try {
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            if (screenWake != null && screenWake.isHeld()) screenWake.release();
+            screenWake = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP
+                | PowerManager.ON_AFTER_RELEASE, "webkiosk:scherm");
+            screenWake.acquire(ms);
+        } catch (Exception ignored) {}
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
+    }
+
+    void releaseScreen() {
+        try { if (screenWake != null && screenWake.isHeld()) screenWake.release(); } catch (Exception ignored) {}
+        screenWake = null;
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
+    }
+
     void setBrightness(float level) {
         WindowManager.LayoutParams lp = getWindow().getAttributes();
         lp.screenBrightness = level; // -1: zoals Android hem heeft

@@ -199,7 +199,7 @@ dan toont de scanterminal een kabel-icoontje in plaats van de wifi-balkjes (dus 
 ## Scherm opfrissen (tegen een "ingebrand" beeld)
 Een LCD-scherm dat maandenlang hetzelfde toont (zoals een CC600 op de balie), houdt soms een schaduw van dat beeld
 (beeldretentie). In EventVOX geeft de opdracht **Scherm opfrissen** het toestel hoogstens 3 uur lang wisselende kleuren
-(wit, zwart, rood, groen, blauw) op volle helderheid; het scherm blijft zolang aan. Een tik, toets, scan of NFC-tag stopt
+(wit, zwart, rood, groen, blauw) op volle helderheid; het scherm gaat aan (ook als het toestel sliep) en blijft zolang aan. Een tik, toets, scan of NFC-tag stopt
 het (die gaat dan niet naar de scanterminal). Vaak is de schaduw daarna weg; anders een paar nachten herhalen. Zet het
 scherm daarnaast niet op de hoogste helderheid en gebruik *Dimmen*.
 
@@ -290,7 +290,7 @@ interval, en het update-adres. In `webkiosk.properties`: `auto_update`, `update_
 ## Bediening vanuit EventVOX
 Op de terminalpagina (kaart Kiosk-app) en voor een selectie in de terminallijst:
 - **Opdrachten**: *Pagina herladen*, *App herstarten*, *Nu bijwerken* (zonder te wachten tot het toestel rustig is) en
-  *Zoek mij* (30 s piepen, trillen en knipperen; een tik stopt het). Elke opdracht wordt precies één keer uitgevoerd.
+  *Zoek mij* (30 s piepen, trillen en knipperen, ook als het scherm in slaap was; een tik stopt het), *Scherm opfrissen*. Elke opdracht wordt precies één keer uitgevoerd.
 - **Locatie bij Zoek mij**: het toestel zoekt hoogstens een minuut zijn positie (GPS, buiten het nauwkeurigst) en stuurt die
   mee met het wifi-toegangspunt waarmee het verbonden is (binnen vaak handiger). EventVOX toont hem op een kaartje bij de
   terminal. Alleen de laatste locatie, 24 uur bewaard; er wordt nooit zomaar een locatie vastgelegd.

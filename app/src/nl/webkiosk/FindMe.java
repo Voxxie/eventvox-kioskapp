@@ -43,6 +43,7 @@ final class FindMe {
     /** 30 s piepen, trillen en knipperen (fel scherm); een tik stopt het */
     void locate() {
         if (locateView != null) return;
+        a.wakeScreen(40000); // ook als het toestel slaapt: anders piept hij met een zwart scherm
         a.markActivity();
         LinearLayout box = new LinearLayout(a);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -69,6 +70,7 @@ final class FindMe {
         if (locateTone != null) { try { locateTone.release(); } catch (Exception ignored) {} locateTone = null; }
         if (locateView != null) { a.root.removeView(locateView); locateView = null; }
         a.setBrightness(-1f);
+        a.releaseScreen();
         a.focusWeb();
     }
 

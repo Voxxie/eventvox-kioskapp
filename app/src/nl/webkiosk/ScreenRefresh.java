@@ -31,6 +31,7 @@ final class ScreenRefresh {
     void start() {
         if (view != null) return;
         a.findMe.stopLocate();
+        a.wakeScreen(DURATION_MS + 60000); // ook als het toestel slaapt
         View v = new View(a);
         v.setBackgroundColor(Color.WHITE);
         v.setOnClickListener(new View.OnClickListener() { public void onClick(View x) { stop("gestopt met een tik"); } });
@@ -54,6 +55,7 @@ final class ScreenRefresh {
         view = null;
         if (!a.prefs.getBoolean("keep_screen_on", false)) a.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         a.setBrightness(-1f);
+        a.releaseScreen();
         a.markActivity();
         a.focusWeb();
         KioskLog.add(a, "Scherm opfrissen " + why);
