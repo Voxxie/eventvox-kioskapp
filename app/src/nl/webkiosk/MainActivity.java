@@ -98,6 +98,7 @@ public class MainActivity extends Activity {
 
         lastBattery = registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
         IntentFilter wf = new IntentFilter(Intent.ACTION_SCREEN_ON);
+        wf.addAction(Intent.ACTION_SCREEN_OFF);
         wf.addAction(Intent.ACTION_USER_PRESENT);
         wf.addAction(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED);
         registerReceiver(wakeReceiver, wf);
@@ -680,12 +681,25 @@ public class MainActivity extends Activity {
         if (sec > 0) handler.postDelayed(nfcPeriodic, sec * 1000L);
     }
 
+    long screenOffAt = 0;
+
+    static String durationText(long ms) {
+        long min = ms / 60000;
+        return min >= 60 ? (min / 60) + " u " + (min % 60) + " min" : min + " min";
+    }
+
     final BroadcastReceiver wakeReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
             String a = i.getAction();
             if (NfcAdapter.ACTION_ADAPTER_STATE_CHANGED.equals(a)) {
                 if (i.getIntExtra(NfcAdapter.EXTRA_ADAPTER_STATE, 0) == NfcAdapter.STATE_ON) restartNfc("NFC aan");
+            } else if (Intent.ACTION_SCREEN_OFF.equals(a)) {
+                screenOffAt = System.currentTimeMillis();
             } else if (Intent.ACTION_SCREEN_ON.equals(a)) {
+                // In het logboek hoe lang hij sliep (vanaf een minuut): zo is een wit scherm terug te vinden
+                long slept = screenOffAt > 0 ? System.currentTimeMillis() - screenOffAt : 0;
+                if (slept >= 60000) KioskLog.add(MainActivity.this, "Scherm aan na " + durationText(slept) + " slaapstand");
+                screenOffAt = 0;
                 restartNfc("scherm aan");
                 scheduleWakeCheck();
             } else if (Intent.ACTION_USER_PRESENT.equals(a)) {
@@ -1007,10 +1021,21 @@ public class MainActivity extends Activity {
             int h = c.get(java.util.Calendar.HOUR_OF_DAY);
             if (h < hour || h >= hour + 3) return; // alleen in de 3 uur erna; daarna wachten tot de volgende nacht
             if (SystemClock.uptimeMillis() - lastActivity < 300000 || adminView != null || net.wifiView != null) return;
+            // Niet met het scherm uit of zonder netwerk: een TC51 in de slaapstand zet de wifi uit, en een pagina die
+            // dan opnieuw laadt bleef hangen (wit scherm bij het oppakken). Dan deze nacht overslaan of later proberen.
+            if (!screenOn() || !net.isOnline()) return;
             prefs.edit().putString("nightly_done", today).apply();
             rebuildWeb("nachtelijk herladen", false);
         }
     };
+
+    /** Staat het scherm aan (niet in de slaapstand)? */
+    boolean screenOn() {
+        try {
+            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+            return pm == null || pm.isInteractive();
+        } catch (Exception e) { return true; }
+    }
 
     // ---------- volume vast ----------
 

@@ -194,7 +194,7 @@ want die trilt alleen na een tik op de pagina, en een scan met DataWedge of NFC 
 Komt het toestel uit de slaapstand (scherm aan, ontgrendelen, of terug na meer dan een minuut), dan controleert de app of
 de pagina nog leeft. Antwoordt die niet binnen 3 seconden, of is hij leeg, dan laadt de app de website opnieuw (zoals na
 een crash; niet verstuurde scans bewaart de scanterminal zelf). In het logboek staat dan *Herladen: pagina reageert niet
-na slaapstand*. Bij elke start staat ook de versie van de WebView in het logboek.
+na slaapstand*, en na elke slaapstand van meer dan een minuut *Scherm aan na … slaapstand*. Bij elke start staat ook de versie van de WebView in het logboek.
 
 ## Zebra CC600 / CC6000 (zonder accu, met netwerkkabel)
 De app werkt ook op de kiosk-toestellen voor op de balie. Die hebben geen accu: de app meldt dan *geen accu*
@@ -276,7 +276,9 @@ interval, en het update-adres. In `webkiosk.properties`: `auto_update`, `update_
   het terug als de opslag van de pagina verloren is (cache gewist, beschadigd). De terminal meldt zich dan als dezelfde
   terminal aan. Wordt de terminal in EventVOX ingetrokken, dan vervalt de kopie en koppelt hij gewoon opnieuw.
 - **'s Nachts herladen** (`nightly_reload`, `nightly_hour`, standaard 04:00): één keer per nacht een verse pagina, alleen
-  als het toestel 5 minuten niet gebruikt is.
+  als het toestel 5 minuten niet gebruikt is, het scherm aan staat en er netwerk is (een TC51 in de slaapstand zet de
+  wifi uit; herladen zonder netwerk gaf een wit scherm bij het oppakken). Slaapt het toestel de hele nacht, dan slaat
+  hij het die nacht over.
 - **Volume vast** (`volume_lock`, standaard uit): aan (bv. 80%) blijft de piep van de scanterminal altijd hoorbaar en doen
   de volumeknoppen niets; uit werken de volumeknoppen gewoon.
 - **Dimmen** (`dim_minutes`, `dim_level`): met *scherm altijd aan* na 2 minuten zonder tik, scan of NFC naar 15%.

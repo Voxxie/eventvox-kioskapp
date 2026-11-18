@@ -154,7 +154,7 @@ in), dan vervalt de kopie. Verander die sleutelnaam nooit zonder de frontend mee
 - Na de slaapstand (scherm aan, ontgrendelen, terug na > 1 min): `wakeCheck()` vraagt de pagina een teken van leven; geen
   antwoord binnen 3 s of een lege pagina: nieuwe WebView, anders alleen opnieuw tekenen (tegen een wit scherm). Bij
   het starten staat de WebView-versie in het logboek.
-- Nachtelijk herladen (standaard 04:00–07:00, alleen na 5 min rust), volume vast (standaard uit; aan: volumeknoppen afgevangen in
+- Nachtelijk herladen (standaard 04:00–07:00, alleen na 5 min rust, met het scherm aan en met netwerk; anders die nacht niet), volume vast (standaard uit; aan: volumeknoppen afgevangen in
   `dispatchKeyEvent` en elke volumewijziging teruggezet; **nooit** `DISALLOW_ADJUST_VOLUME`: dat dempt het hoofdvolume),
   dimmen (alleen met "scherm altijd aan", na 2 min naar 15%).
 - Meldingen bovenaan (`bannerBox`, tikken gaan erdoor): accu bijna leeg (`low_battery`, 15%), klok wijkt > 2 min af
