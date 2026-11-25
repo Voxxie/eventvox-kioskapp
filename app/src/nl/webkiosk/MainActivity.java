@@ -798,6 +798,7 @@ public class MainActivity extends Activity {
     void tagFromAndroid(Intent i) {
         final Tag tag = i.getParcelableExtra(NfcAdapter.EXTRA_TAG);
         if (tag == null) return;
+        nfcFallbackTags++;
         nfcError("NFC-tag kwam via Android binnen (de lezer van de app stond niet aan); lezer opnieuw aan");
         restartNfc("tag via Android");
         new Thread(new Runnable() { public void run() { handleTag(tag); } }).start();
@@ -805,6 +806,24 @@ public class MainActivity extends Activity {
 
     /** Hoeveel tags sinds het starten aan de pagina zijn gegeven (de eerste komt in het logboek) */
     int nfcDelivered = 0;
+    /** Hoeveel daarvan via het vangnet (Android) binnenkwamen, en wanneer de laatste tag kwam (voor EventVOX) */
+    int nfcFallbackTags = 0;
+    volatile long nfcLastTagAt = 0;
+
+    /** NFC voor de status naar EventVOX: { available, enabled, mode, tags, fallback_tags, last_tag_at?, error? } */
+    JSONObject nfcStatusJson() {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("available", nfcAdapter() != null);
+            o.put("enabled", nfcOn());
+            o.put("mode", prefs.getString("nfc_mode", "both"));
+            o.put("tags", nfcDelivered);
+            o.put("fallback_tags", nfcFallbackTags);
+            if (nfcLastTagAt > 0) o.put("last_tag_at", iso(nfcLastTagAt));
+            if (!nfcLastError.isEmpty()) o.put("error", nfcLastError);
+        } catch (Exception ignored) {}
+        return o;
+    }
 
     /** Wordt op een achtergrondthread aangeroepen. */
     void handleTag(Tag tag) {
@@ -853,6 +872,8 @@ public class MainActivity extends Activity {
         String mode = prefs.getString("nfc_mode", "both");
         if (web == null) { KioskLog.add(this, "NFC-tag niet doorgegeven: geen pagina"); return; }
         if (nfcDelivered++ == 0) KioskLog.add(this, "Eerste NFC-tag doorgegeven aan de pagina (" + mode + ")");
+        lastScanWallAt = System.currentTimeMillis();
+        nfcLastTagAt = lastScanWallAt;
         if (mode.equals("event") || mode.equals("both")) {
             String js = "(function(d){try{window.dispatchEvent(new CustomEvent('webkiosk-nfc',{detail:d}));}catch(e){}"
                       + "if(typeof window.onWebKioskNfc==='function')window.onWebKioskNfc(d);})(" + o.toString() + ");";
@@ -1373,6 +1394,8 @@ public class MainActivity extends Activity {
             long appCrashAt = prefs.getLong("app_crash_at", 0);
             if (appCrashAt > 0) o.put("last_app_crash_at", iso(appCrashAt));
             o.put("nfc_restarts", nfcRestarts);
+            // NFC: aan, hoeveel tags, wanneer de laatste, hoe vaak via het vangnet (zonder UID)
+            o.put("nfc", nfcStatusJson());
             if (clockCheckedAt > 0) o.put("clock_skew_s", clockSkew);
             o.put("settings_version", prefs.getInt("remote_settings_version", 0));
             o.put("command_done", prefs.getInt("last_command_id", 0));
@@ -1670,6 +1693,8 @@ public class MainActivity extends Activity {
      */
     @Override public boolean dispatchKeyEvent(KeyEvent e) {
         int k = e.getKeyCode();
+        // Een scanner als toetsenbord (eigen DataWedge-profielen, USB/Bluetooth) eindigt met Enter: telt als scan
+        if (k == KeyEvent.KEYCODE_ENTER && e.getAction() == KeyEvent.ACTION_UP) lastScanWallAt = System.currentTimeMillis();
         boolean system = k == KeyEvent.KEYCODE_BACK || k == KeyEvent.KEYCODE_HOME || k == KeyEvent.KEYCODE_VOLUME_UP
             || k == KeyEvent.KEYCODE_VOLUME_DOWN || k == KeyEvent.KEYCODE_POWER || k == KeyEvent.KEYCODE_APP_SWITCH;
         markActivity();
@@ -1848,6 +1873,7 @@ public class MainActivity extends Activity {
     }
 
     void deliverScan(String data, String symbology) {
+        lastScanWallAt = System.currentTimeMillis();
         markActivity();
         if (screenRefresh.view != null) { screenRefresh.stop("gestopt met een scan"); return; } // niet naar de pagina
         if (isAppCode(data)) { handleAppCode(data); return; } // nooit naar de website
@@ -1988,10 +2014,43 @@ public class MainActivity extends Activity {
         adminScreen.adminEmit("update", d);
     }
 
-    /** Niet installeren terwijl iemand het toestel gebruikt: wacht tot 2 minuten geen aanraking. */
+    /*
+     * Een automatische update niet midden in een evenement: de terminal is tijdens het installeren even weg. Pas als
+     * het toestel 2 minuten niet aangeraakt is, er een uur geen scan of tag was, en het aan de lader hangt of het
+     * nacht is (00:00-06:00). Wacht een update al 24 uur, dan is de lader of de nacht niet meer nodig (een toestel dat
+     * nooit aan de lader gaat, krijgt hem ook). Nu bijwerken (EventVOX of het beheerscherm) installeert altijd meteen.
+     */
+    static final long NO_SCAN_BEFORE_INSTALL_MS = 60 * 60000L;
+    static final long UPDATE_WAIT_MAX_MS = 24 * 3600000L;
+    /** Laatste scan of tag (System.currentTimeMillis), 0: nog geen */
+    volatile long lastScanWallAt = 0;
+    long updatePendingSince = 0;
+    int updatePendingCode = 0;
+
+    /** Waarom een klaarstaande update nog wacht; null: hij mag nu */
+    String installWaitReason() {
+        long now = System.currentTimeMillis();
+        if (lastTouch != 0 && SystemClock.uptimeMillis() - lastTouch < IDLE_BEFORE_INSTALL_MS) return "het toestel wordt gebruikt";
+        if (lastScanWallAt != 0 && now - lastScanWallAt < NO_SCAN_BEFORE_INSTALL_MS) return "minder dan een uur na de laatste scan";
+        if (now - updatePendingSince >= UPDATE_WAIT_MAX_MS) return null;
+        boolean charging = !"none".equals(Battery.batteryJson(lastBattery).optString("plugged", "none"));
+        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        if (!charging && hour >= 6) return "niet aan de lader (of 's nachts)";
+        return null;
+    }
+
     void installWhenIdle(final Updater.Info info) {
-        long idle = SystemClock.uptimeMillis() - lastTouch;
-        if (lastTouch != 0 && idle < IDLE_BEFORE_INSTALL_MS) {
+        if (info.versionCode != updatePendingCode) {
+            updatePendingCode = info.versionCode;
+            updatePendingSince = System.currentTimeMillis();
+        }
+        String wait = installWaitReason();
+        if (wait != null) {
+            String result = "nieuw: " + info.versionName + " (wacht: " + wait + ")";
+            if (!result.equals(prefs.getString("update_last_result", ""))) {
+                prefs.edit().putString("update_last_result", result).apply();
+                KioskLog.add(this, "Update " + info.versionName + " wacht: " + wait);
+            }
             handler.postDelayed(new Runnable() { public void run() { installWhenIdle(info); } }, 300000);
             return;
         }

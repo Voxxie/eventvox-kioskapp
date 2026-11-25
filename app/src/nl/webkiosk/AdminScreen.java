@@ -162,6 +162,11 @@ final class AdminScreen {
         o.put("pinDefault", "1234".equals(a.pin()));
         // Voor het overzicht van het beheerscherm: de huidige wifi-verbinding en welke instellingen uit EventVOX komen
         o.put("wifiNow", a.wifiJson());
+        // Mobiel internet (een Zebra met een modem) en waarover het toestel nu internet heeft
+        JSONObject mob = a.mobile.json();
+        o.put("mobile", mob == null ? JSONObject.NULL : mob);
+        String up = a.uplink();
+        o.put("uplink", up == null ? JSONObject.NULL : up);
         JSONArray remoteKeys = new JSONArray();
         if (a.prefs.getInt("remote_settings_version", 0) > 0) {
             for (String k : a.prefs.getString("remote_settings_keys", "").split(",\\s*")) if (!k.isEmpty()) remoteKeys.put(k);

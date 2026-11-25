@@ -92,6 +92,34 @@ test('overview: tiles grey when fine, red or orange on a problem; summaries in t
     await bad.ctx.close();
 });
 
+test('mobile internet (a Zebra with a modem): 4G/5G in the network tile, the menu and the network screen; nothing on a TC51', async () => {
+    const { p, ctx, errors } = await admin(baseState({ wifiNow: { connected: false }, uplink: 'mobile',
+        mobile: { connected: true, sim: true, type: '5G', level: 3, operator: 'KPN', roaming: false } }), { unlocked: true });
+    await p.waitForSelector('#admin:not([hidden])');
+    assert.equal(await p.locator('#t-network .t-val').innerText(), '5G · goed');
+    assert.equal(await p.locator('#t-network.bad, #t-network.warn').count(), 0, 'no wifi is fine on mobile internet');
+    assert.match(await p.locator('#m-network').innerText(), /Mobiel 5G · KPN/);
+    await p.click('[data-go="network"]');
+    const net = await p.locator('#net-now').innerText();
+    assert.match(net, /Wifi\s*niet verbonden/);
+    assert.match(net, /Mobiel\s*5G · KPN/);
+    assert.match(net, /Internet via\s*mobiel/);
+    await ctx.close();
+    // Without a SIM card it says so
+    const nosim = await admin(baseState({ mobile: { connected: false, sim: false }, uplink: 'wifi' }), { unlocked: true });
+    await nosim.p.waitForSelector('#admin:not([hidden])');
+    await nosim.p.click('[data-go="network"]');
+    assert.match(await nosim.p.locator('#net-now').innerText(), /Mobiel\s*geen simkaart/);
+    await nosim.ctx.close();
+    // A TC51 (no modem: mobile null): no mobile row
+    const tc51 = await admin(baseState({ mobile: null }), { unlocked: true });
+    await tc51.p.waitForSelector('#admin:not([hidden])');
+    await tc51.p.click('[data-go="network"]');
+    assert.doesNotMatch(await tc51.p.locator('#net-now').innerText(), /Mobiel/);
+    assert.deepEqual([...errors, ...nosim.errors, ...tc51.errors], []);
+    await tc51.ctx.close();
+});
+
 test('details: menu to a screen and back (arrow and Android back), settings go to the app, "via EventVOX" shown', async () => {
     const { p, ctx, errors, calls } = await admin(baseState({ remoteKeys: ['orientation'] }), { unlocked: true });
     await p.waitForSelector('#admin:not([hidden])');

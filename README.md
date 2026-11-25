@@ -126,6 +126,11 @@ starten nog een paar keer aan (na 3, 8, 15, 30, 60 en 120 s). In het logboek (Be
 EventVOX) staat het als NFC bij het starten nog niet klaar was (*NFC nog niet beschikbaar bij het starten*), wanneer hij
 alsnog gevonden is, en als het aanzetten van de lezer mislukte of NFC op het toestel uit staat.
 
+### NFC in EventVOX
+Met elke hartslag gaat mee of NFC aan staat, hoeveel tags sinds de start van de app aan de pagina zijn gegeven, wanneer
+de laatste kwam, hoe vaak het vangnet een tag opving, en de laatste NFC-fout (geen tagnummers). Bij de terminal in
+EventVOX zie je zo welk toestel NFC-problemen heeft, zonder eerst het logboek op te vragen.
+
 ### Piept bij een tag, maar er gebeurt niets
 Het toestel piept zodra het een tag ziet, ook als de lezer van de app op dat moment niet aan staat. Dan ging de tag naar
 Android zelf en kwam hij niet in de pagina. De app vangt zo'n tag nu ook op (een vangnet naast de eigen lezer), geeft hem
@@ -229,6 +234,9 @@ is (zonder signaalwisselingen). Een toestel zonder modem (de TC51) merkt er niet
 5G naast 4G (NSA, het meest gebruikte 5G in Nederland) meldt Android pas vanaf Android 11; op oudere toestellen staat
 daar *4G*. Een toestel met Android 8.1 kan geen 5G.
 
+Ook in het beheermenu op het toestel: de tegel *Netwerk* toont via mobiel internet de soort en het signaal (*5G ·
+goed*), en het netwerkscherm de provider, het signaal, of er een simkaart in zit en waarover het toestel internet heeft.
+
 ## Zebra CC600 / CC6000 (zonder accu, met netwerkkabel)
 De app werkt ook op de kiosk-toestellen voor op de balie. Die hebben geen accu: de app meldt dan *geen accu*
 (`present: false`), dus de scanterminal en EventVOX tonen geen accu. Heeft het toestel internet via de netwerkkabel,
@@ -291,7 +299,11 @@ Bij elke release maakt de workflow ook een `update.json` (versie, download-URL, 
 De app controleert die **1 minuut na het starten** en wanneer je in het beheermenu op *Nu controleren* tikt
 (periodiek kan ook: `update_check_hours`). Is er een nieuwere versie, dan:
 - downloadt hij de APK en controleert de SHA-256;
-- wacht hij tot het toestel **2 minuten niet is aangeraakt** (geen update midden in een scan);
+- wacht hij op een rustig moment, zodat de terminal niet midden in een evenement even wegvalt: het toestel is
+  **2 minuten niet aangeraakt**, er was **een uur geen scan of tag**, en het hangt **aan de lader** of het is
+  **nacht** (00:00–06:00). Wacht een update al 24 uur, dan is de lader of de nacht niet meer nodig. Waarop hij wacht,
+  staat bij Updates in het beheermenu en in EventVOX (*nieuw: 0.0.22 (wacht: …)*);
+- **Nu installeren** (beheermenu) of **Bijwerken** (EventVOX) installeert altijd meteen;
 - installeert hij **stil** (als device owner) en start daarna vanzelf opnieuw op.
 
 Beheermenu > **Updates**: nu controleren (met release-notes en knop *Nu installeren*), automatisch bijwerken aan/uit,
