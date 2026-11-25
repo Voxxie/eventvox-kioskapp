@@ -105,6 +105,14 @@ Instellen in `webkiosk.properties` (`nfc_mode`):
 Veel toegangs- en kassasystemen gebruiken `dec_reversed`; kijk welk formaat jouw systeem verwacht.
 Je kunt alles testen met `nfc-test.html`.
 
+**Snelheid en geluid**
+- Standaard zoekt Android niet eerst naar tekst of een URL op de tag (NDEF): de tag-ID is dan sneller in de pagina. In
+  het event is `ndef` dan leeg. Wil je die inhoud wel: `nfc_read_ndef=true` (Beheermenu > NFC > Meer opties), of
+  `nfc_keyboard_value=ndef` (dan altijd).
+- `nfc_sound=false` (Beheermenu > NFC > *Piep van Android bij een tag*): geen piep van Android, alleen het geluid van de
+  website (de scanterminal laat al horen of de scan goed of fout is). Standaard aan. Een tag via het vangnet (zie
+  hieronder) piept altijd.
+
 ### NFC na slaapstand
 Op Android (ook Zebra) stopt NFC soms na slaapstand: na scherm-uit/aan is de *reader mode* van de app niet meer actief.
 De app vangt dat af door reader mode opnieuw te registreren bij **scherm aan**, **ontgrendelen**, **venster-focus** en
@@ -204,9 +212,10 @@ uitslag aan (1× kort toegelaten, 2× kort waarschuwing, 3× lang geweigerd); in
 want die trilt alleen na een tik op de pagina, en een scan met DataWedge of NFC is geen tik. Uit te zetten met
 `vibrate=false` of in het beheerscherm (Scanner), met testknoppen voor de drie patronen.
 
-## Wit scherm na de slaapstand
+## Wit scherm na de slaapstand (of een vastgelopen pagina)
 Komt het toestel uit de slaapstand (scherm aan, ontgrendelen, of terug na meer dan een minuut), dan controleert de app of
-de pagina nog leeft. Antwoordt die niet binnen 3 seconden, of is hij leeg, dan laadt de app de website opnieuw (zoals na
+de pagina nog leeft. Dat doet hij ook elke 5 minuten als het toestel even (een minuut) niet gebruikt is en het scherm aan
+staat; dan krijgt de pagina 10 seconden (*pagina reageert niet bij de controle*). Antwoordt die niet binnen 3 seconden, of is hij leeg, dan laadt de app de website opnieuw (zoals na
 een crash; niet verstuurde scans bewaart de scanterminal zelf). In het logboek staat dan *Herladen: pagina reageert niet
 na slaapstand*, en na elke slaapstand van meer dan een minuut *Scherm aan na … slaapstand*. Bij elke start staat ook de versie van de WebView in het logboek.
 
@@ -286,6 +295,12 @@ interval, en het update-adres. In `webkiosk.properties`: `auto_update`, `update_
 ## Betrouwbaarheid en beheer
 - **Herstel na een crash**: stopt of crasht de pagina (bv. door geheugengebrek), dan maakt de app hem opnieuw en laadt
   de website; drie keer binnen een minuut: 30 s wachten. Het aantal crashes staat in het beheerscherm en in EventVOX.
+- **Crash van de app zelf**: de app start na 1,5 s vanzelf opnieuw (drie keer binnen een minuut: na 30 s). In het
+  logboek staat *App gecrasht:* met de soort fout en de plek in de code (geen gegevens); het aantal gaat mee naar
+  EventVOX (`app_crashes`).
+- **Geheugen**: meldt Android dat het geheugen krap wordt, dan staat dat in het logboek (met hoeveel er vrij is); bij
+  heel krap geheugen en een toestel dat even niet gebruikt wordt, ruimt de app de cache van de pagina in het
+  werkgeheugen op.
 - **Terminal-identiteit**: de app bewaart het token van de EventVOX-scanterminal versleuteld (Android Keystore) en zet
   het terug als de opslag van de pagina verloren is (cache gewist, beschadigd). De terminal meldt zich dan als dezelfde
   terminal aan. Wordt de terminal in EventVOX ingetrokken, dan vervalt de kopie en koppelt hij gewoon opnieuw.

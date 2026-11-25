@@ -88,7 +88,7 @@ intent-extras (`url`, `pin`) → wat in het beheerscherm is ingesteld (opgeslage
 Sleutels: `url` (met `{serial}`, `{version}`, `{model}`), `pin`, `menu_taps`, `keep_screen_on`, `reload_minutes`,
 `ignore_ssl_errors`, `nfc_mode`, `nfc_uid_format`, `nfc_keyboard_value`, `nfc_send_enter`, `nfc_debounce_ms`,
 `nfc_refresh_seconds`, `volume_lock`, `dim_minutes`, `dim_level`, `nightly_reload`, `nightly_hour`, `low_battery`,
-`orientation`, `update_channel`,
+`orientation`, `update_channel`, `nfc_sound`, `nfc_read_ndef`,
 `auto_update`, `update_check_hours`, `update_url`, `wifi.N.ssid|password|security|hidden|priority`,
 `wifi_remove_others`, `wifi_lockdown`, `wifi_qr`, `datawedge`, `scan_mode`, `vibrate`.
 Een nieuwe sleutel: standaardwaarde in de code, inlezen in `readFileConfig()`, tonen/wijzigen in `adminState()` en
@@ -109,7 +109,7 @@ de frontend toont "Kiosk-app" (`kioskAppText`).
 | `getNetwork()` | JSON `{ uplink: ethernet\|wifi\|null, ethernet: { connected, speed_mbps? }\|null }`; via de kabel toont de scanterminal een kabel-icoon in plaats van de wifi-balkjes |
 | `getSerial()`, `getDeviceInfo()` | serienummer; JSON `{ serial, model, manufacturer, android, sdk, build, appVersion }` |
 | `vibrate(pattern)` | trillen (JSON-array of getal, zoals `navigator.vibrate`) |
-| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, nfc_restarts, clock_skew_s, settings_version, command_done, orientation, wifi, ethernet? { connected, speed_mbps? } (alleen met een netwerkpoort), uplink? (ethernet|wifi), wifi_version (altijd, ook leeg: de backend stuurt `kiosk_wifi` alleen als dit veld er is), wifi_result?, update { checked_at, result }, location?, log? }`; `location` `{ lat, lon, accuracy_m, provider, at, wifi { ssid, bssid, rssi } }` alleen in de 10 minuten na Zoek mij; `log` alleen de eerste keer na `requestDiagnostics()` |
+| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, app_crashes, last_app_crash_at?, nfc_restarts, clock_skew_s, settings_version, command_done, orientation, wifi, ethernet? { connected, speed_mbps? } (alleen met een netwerkpoort), uplink? (ethernet|wifi), wifi_version (altijd, ook leeg: de backend stuurt `kiosk_wifi` alleen als dit veld er is), wifi_result?, update { checked_at, result }, location?, log? }`; `location` `{ lat, lon, accuracy_m, provider, at, wifi { ssid, bssid, rssi } }` alleen in de 10 minuten na Zoek mij; `log` alleen de eerste keer na `requestDiagnostics()` |
 | `requestDiagnostics()` | het logboek gaat mee met de volgende `getStatus()` |
 | `command(json)` | opdracht uit EventVOX `{ id, command: reload\|restart\|update\|locate\|refresh_screen }` (`refresh_screen`: Scherm opfrissen, `ScreenRefresh`: hoogstens 3 uur wisselende kleuren op volle helderheid tegen beeldretentie; een tik, toets, scan of tag stopt het); elke id één keer (`last_command_id`), gemeld als `command_done` in `getStatus()` |
 | `applySettings(json)` | instellingen uit EventVOX `{ version, values }`; elke versie één keer, via `applySetting()` (nooit `url`, `pin`, `update_url`) |
@@ -158,6 +158,14 @@ in), dan vervalt de kopie. Verander die sleutelnaam nooit zonder de frontend mee
   reader mode toch niet aan (het toestel piept, de pagina krijgt niets), dan komt de tag via `onNewIntent`
   (`tagFromAndroid`) alsnog in `handleTag`, en gaat de lezer opnieuw aan. Geen UID in het logboek.
 - Crash van de pagina (`onRenderProcessGone`): nieuwe WebView; 3× binnen een minuut: 30 s wachten.
+- Crash van de app zelf: `installCrashGuard()` (eerste regel na `prefs` in `onCreate`) zet soort fout + plek in de
+  code in het logboek (nooit de fouttekst), telt `app_crashes`/`app_crash_at` (in `getStatus()` als `app_crashes`,
+  `last_app_crash_at`) en start de app via de AlarmManager na 1,5 s (3× binnen een minuut: 30 s).
+- Controle of de pagina leeft, ook zonder slaapstand (`liveCheck`, elke 5 min, alleen na 1 min rust met het scherm aan
+  en zonder beheer-/netwerkscherm, 10 s de tijd). Geheugen krap (`onTrimMemory`): in het logboek; heel krap en rustig:
+  `clearCache(false)`.
+- NFC: `FLAG_READER_SKIP_NDEF_CHECK` tenzij `readNdef()` (`nfc_keyboard_value=ndef` of `nfc_read_ndef`); dan is
+  `ndef` in `webkiosk-nfc` leeg (het veld blijft). `nfc_sound=false`: `FLAG_READER_NO_PLATFORM_SOUNDS`.
 - Na de slaapstand (scherm aan, ontgrendelen, terug na > 1 min): `wakeCheck()` vraagt de pagina een teken van leven; geen
   antwoord binnen 3 s of een lege pagina: nieuwe WebView, anders alleen opnieuw tekenen (tegen een wit scherm). Bij
   het starten staat de WebView-versie in het logboek.
