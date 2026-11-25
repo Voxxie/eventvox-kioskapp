@@ -111,6 +111,13 @@ De app vangt dat af door reader mode opnieuw te registreren bij **scherm aan**, 
 **NFC weer aan**, steeds met een tweede poging na 1,5 s (de NFC-chip is direct na het ontwaken soms nog niet klaar).
 Een tag die nog tegen het toestel ligt wordt daardoor niet dubbel doorgegeven (`nfc_debounce_ms`, standaard 1500).
 
+### NFC na een herstart van het toestel
+Na een herstart start de app soms eerder dan de NFC-dienst van Android. Vroeger bleef NFC dan uit tot de app opnieuw
+startte. Nu vraagt de app de NFC-adapter bij elke poging opnieuw op, en zet hij de lezer de eerste twee minuten na het
+starten nog een paar keer aan (na 3, 8, 15, 30, 60 en 120 s). In het logboek (Beheermenu > Logboek, of *Diagnose* in
+EventVOX) staat het als NFC bij het starten nog niet klaar was (*NFC nog niet beschikbaar bij het starten*), wanneer hij
+alsnog gevonden is, en als het aanzetten van de lezer mislukte of NFC op het toestel uit staat.
+
 Werkt het op een toestel toch niet goed:
 - Beheermenu > NFC > **Periodiek verversen** (of `nfc_refresh_seconds=30`) als extra vangnet;
 - Beheermenu > NFC > **NFC nu herstarten** toont ook wanneer en waarom reader mode het laatst is herstart;
