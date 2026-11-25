@@ -150,6 +150,13 @@ in), dan vervalt de kopie. Verander die sleutelnaam nooit zonder de frontend mee
 - Toetsen die het begin van `WIFI:` vormen worden max 100 ms vastgehouden (een mens typt trager dan een scanner) en
   anders in volgorde doorgestuurd.
 - NFC na slaapstand: reader mode opnieuw bij scherm aan, ontgrendelen, focus en NFC aan (+ tweede poging na 1,5 s).
+- NFC na een herstart van het toestel: de NFC-dienst kan later klaar zijn dan de app. `nfcAdapter()` vraagt de adapter
+  bij elke poging opnieuw (nooit eenmalig in `onCreate`), en de eerste 2 minuten na het starten wordt de lezer nog een
+  paar keer aangezet (`NFC_STARTUP_SECONDS`). Een mislukte start en *NFC staat uit* komen in het logboek (alleen als de
+  fout verandert).
+- NFC-vangnet: naast reader mode staat `enableForegroundDispatch` aan (in `startNfcForced`, uit in `onPause`). Stond
+  reader mode toch niet aan (het toestel piept, de pagina krijgt niets), dan komt de tag via `onNewIntent`
+  (`tagFromAndroid`) alsnog in `handleTag`, en gaat de lezer opnieuw aan. Geen UID in het logboek.
 - Crash van de pagina (`onRenderProcessGone`): nieuwe WebView; 3× binnen een minuut: 30 s wachten.
 - Na de slaapstand (scherm aan, ontgrendelen, terug na > 1 min): `wakeCheck()` vraagt de pagina een teken van leven; geen
   antwoord binnen 3 s of een lege pagina: nieuwe WebView, anders alleen opnieuw tekenen (tegen een wit scherm). Bij

@@ -1,6 +1,7 @@
 package nl.webkiosk;
 
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.app.admin.DevicePolicyManager;
 import android.content.*;
 import android.content.pm.PackageManager;
@@ -94,6 +95,10 @@ public class MainActivity extends Activity {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         nfc = NfcAdapter.getDefaultAdapter(this);
+        // Na een herstart start de app soms eerder dan de NFC-dienst: dan is er nog geen adapter (nfcAdapter() vraagt
+        // later opnieuw) of komt de lezer niet aan; de eerste twee minuten daarom een paar keer opnieuw (nfcStartup)
+        if (nfc == null) KioskLog.add(this, "NFC nog niet beschikbaar bij het starten; later opnieuw");
+        for (long s : NFC_STARTUP_SECONDS) handler.postDelayed(nfcStartup, s * 1000L);
         web = createWeb();
 
         lastBattery = registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
@@ -204,8 +209,8 @@ public class MainActivity extends Activity {
         });
 
         w.addJavascriptInterface(new Object() {
-            @JavascriptInterface public boolean nfcAvailable() { return nfc != null; }
-            @JavascriptInterface public boolean nfcEnabled() { return nfc != null && nfc.isEnabled(); }
+            @JavascriptInterface public boolean nfcAvailable() { return nfcAdapter() != null; }
+            @JavascriptInterface public boolean nfcEnabled() { return nfcOn(); }
             @JavascriptInterface public String getBattery() { return Battery.batteryJson(lastBattery).toString(); }
             @JavascriptInterface public String getSerial() { return serial(); }
             /** pattern: JSON-array in ms (aan, uit, aan, ...) of één getal; [] of 0 stopt het trillen. */
@@ -528,6 +533,7 @@ public class MainActivity extends Activity {
         handler.removeCallbacks(nfcRestart);
         handler.removeCallbacks(nfcPeriodic);
         if (nfc != null) try { nfc.disableReaderMode(this); } catch (Exception ignored) {}
+        if (nfc != null) try { nfc.disableForegroundDispatch(this); } catch (Exception ignored) {}
         super.onPause();
     }
 
@@ -538,6 +544,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onNewIntent(Intent i) {
         super.onNewIntent(i);
+        if (i != null && isTagIntent(i.getAction())) { tagFromAndroid(i); return; }
         if (i != null && i.getBooleanExtra("provisioned", false)) { applyDeviceOwnerPolicies(); applyProvisionExtras(); loadHome(); return; }
         if (i != null && i.getExtras() != null && (i.hasExtra("url") || i.hasExtra("pin"))) {
             readIntentConfig(i);
@@ -634,8 +641,31 @@ public class MainActivity extends Activity {
 
     // ---------- NFC ----------
 
+    /**
+     * De NFC-adapter. Na een herstart van het toestel is de NFC-dienst er soms nog niet als de app start: dan gaf
+     * getDefaultAdapter() null en bleef NFC uit tot de app opnieuw startte. Nu wordt hij bij elke poging opnieuw gevraagd.
+     */
+    NfcAdapter nfcAdapter() {
+        if (nfc == null) {
+            try { nfc = NfcAdapter.getDefaultAdapter(this); } catch (Exception ignored) {}
+            if (nfc != null) KioskLog.add(this, "NFC gevonden na het starten");
+        }
+        return nfc;
+    }
+
+    boolean nfcOn() {
+        NfcAdapter n = nfcAdapter();
+        try { return n != null && n.isEnabled(); } catch (Exception e) { return false; }
+    }
+
+    /** Seconden na het starten waarop de lezer opnieuw wordt aangezet (de NFC-dienst kan na een herstart later klaar zijn) */
+    static final long[] NFC_STARTUP_SECONDS = { 3, 8, 15, 30, 60, 120 };
+    final Runnable nfcStartup = new Runnable() {
+        public void run() { restartNfc("na het starten"); }
+    };
+
     void startNfc() {
-        if (nfc == null) return;
+        if (nfcAdapter() == null) return;
         if ("off".equals(prefs.getString("nfc_mode", "both")) && !nfcTesting) return;
         startNfcForced();
     }
@@ -653,7 +683,7 @@ public class MainActivity extends Activity {
     int nfcRestarts = 0;
     final Runnable nfcRestart = new Runnable() {
         public void run() {
-            if (!resumed || nfc == null) return;
+            if (!resumed || nfcAdapter() == null) return;
             try { nfc.disableReaderMode(MainActivity.this); } catch (Exception ignored) {}
             startNfc();
             nfcLastRestart = System.currentTimeMillis();
@@ -668,7 +698,7 @@ public class MainActivity extends Activity {
     };
 
     void restartNfc(String reason) {
-        if (nfc == null) return;
+        // Ook zonder adapter: de geplande poging vraagt hem opnieuw (nfcAdapter)
         nfcRestartReason = reason;
         handler.removeCallbacks(nfcRestart);
         handler.postDelayed(nfcRestart, 400);
@@ -712,16 +742,59 @@ public class MainActivity extends Activity {
     long lastTagTime = 0;
     String lastTagUid = "";
 
+    /** De laatste fout bij het aanzetten van de lezer (in het logboek alleen als hij verandert) */
+    String nfcLastError = "";
+
     void startNfcForced() {
-        if (nfc == null) return;
+        if (nfcAdapter() == null) return;
+        if (!nfcOn()) { nfcError("NFC staat uit op het toestel"); return; } // NFC aan: ACTION_ADAPTER_STATE_CHANGED start hem
         int flags = NfcAdapter.FLAG_READER_NFC_A | NfcAdapter.FLAG_READER_NFC_B | NfcAdapter.FLAG_READER_NFC_F
                   | NfcAdapter.FLAG_READER_NFC_V | NfcAdapter.FLAG_READER_NFC_BARCODE;
+        // Vangnet: stond de lezer van de app (reader mode) toch niet aan, dan geeft Android de tag aan deze Activity
+        // (onNewIntent) in plaats van alleen te piepen. Kan alleen terwijl de Activity op de voorgrond staat.
+        if (resumed) try {
+            PendingIntent pi = PendingIntent.getActivity(this, 0,
+                new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
+            nfc.enableForegroundDispatch(this, pi, null, null);
+        } catch (Exception e) {
+            nfcError("NFC-vangnet aanzetten mislukt: " + e.getClass().getSimpleName());
+        }
         try {
             nfc.enableReaderMode(this, new NfcAdapter.ReaderCallback() {
                 public void onTagDiscovered(Tag tag) { handleTag(tag); }
             }, flags, null);
-        } catch (Exception ignored) {}
+            if (!nfcLastError.isEmpty()) KioskLog.add(this, "NFC-lezer weer aan");
+            nfcLastError = "";
+        } catch (Exception e) {
+            nfcError("NFC-lezer aanzetten mislukt: " + e.getClass().getSimpleName() + (e.getMessage() != null ? " " + e.getMessage() : ""));
+        }
     }
+
+    void nfcError(String text) {
+        if (text.equals(nfcLastError)) return;
+        nfcLastError = text;
+        KioskLog.add(this, text);
+    }
+
+    static boolean isTagIntent(String action) {
+        return NfcAdapter.ACTION_TAG_DISCOVERED.equals(action) || NfcAdapter.ACTION_TECH_DISCOVERED.equals(action)
+            || NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action);
+    }
+
+    /**
+     * Een tag die via Android binnenkwam (het vangnet, enableForegroundDispatch): de lezer van de app stond niet aan,
+     * terwijl het toestel de tag wel zag en piepte. Gewoon doorgeven, de lezer opnieuw aanzetten en in het logboek.
+     */
+    void tagFromAndroid(Intent i) {
+        final Tag tag = i.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+        if (tag == null) return;
+        nfcError("NFC-tag kwam via Android binnen (de lezer van de app stond niet aan); lezer opnieuw aan");
+        restartNfc("tag via Android");
+        new Thread(new Runnable() { public void run() { handleTag(tag); } }).start();
+    }
+
+    /** Hoeveel tags sinds het starten aan de pagina zijn gegeven (de eerste komt in het logboek) */
+    int nfcDelivered = 0;
 
     /** Wordt op een achtergrondthread aangeroepen. */
     void handleTag(Tag tag) {
@@ -768,6 +841,8 @@ public class MainActivity extends Activity {
             return;
         }
         String mode = prefs.getString("nfc_mode", "both");
+        if (web == null) { KioskLog.add(this, "NFC-tag niet doorgegeven: geen pagina"); return; }
+        if (nfcDelivered++ == 0) KioskLog.add(this, "Eerste NFC-tag doorgegeven aan de pagina (" + mode + ")");
         if (mode.equals("event") || mode.equals("both")) {
             String js = "(function(d){try{window.dispatchEvent(new CustomEvent('webkiosk-nfc',{detail:d}));}catch(e){}"
                       + "if(typeof window.onWebKioskNfc==='function')window.onWebKioskNfc(d);})(" + o.toString() + ");";
@@ -1645,14 +1720,18 @@ public class MainActivity extends Activity {
     void typeText(String text, boolean enter) {
         // Scherm opfrissen: een scan of NFC-tag stopt het en gaat niet naar de pagina
         if (screenRefresh.view != null) { screenRefresh.stop("gestopt met een scan"); return; }
+        if (web == null) return;
         focusWeb();
+        if (adminView == null && !web.hasFocus()) nfcError("Toetsaanslagen naar de pagina terwijl die de focus niet kreeg");
         KeyCharacterMap km = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD);
         KeyEvent[] evs = km.getEvents(text.toCharArray());
         if (evs != null) for (KeyEvent e : evs) web.dispatchKeyEvent(e);
         else web.dispatchKeyEvent(new KeyEvent(SystemClock.uptimeMillis(), text, KeyCharacterMap.VIRTUAL_KEYBOARD, 0));
         if (enter) {
-            web.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER));
-            web.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER));
+            // Met een echte tijd en het virtuele toetsenbord als bron, zoals de tekens hierboven (niet tijd 0)
+            long t = SystemClock.uptimeMillis();
+            web.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER, 0, 0, KeyCharacterMap.VIRTUAL_KEYBOARD, 0));
+            web.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER, 0, 0, KeyCharacterMap.VIRTUAL_KEYBOARD, 0));
         }
     }
 
@@ -1863,6 +1942,7 @@ public class MainActivity extends Activity {
 
 
     @Override protected void onDestroy() {
+        handler.removeCallbacks(nfcStartup);
         try { unregisterReceiver(batteryReceiver); } catch (Exception ignored) {}
         try { unregisterReceiver(wakeReceiver); } catch (Exception ignored) {}
         try { unregisterReceiver(volumeReceiver); } catch (Exception ignored) {}

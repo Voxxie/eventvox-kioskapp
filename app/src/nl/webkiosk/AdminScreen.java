@@ -145,8 +145,8 @@ final class AdminScreen {
         st.put("datawedge", a.manageDataWedge() ? "app" : "off");
         o.put("settings", st);
         JSONObject n = new JSONObject();
-        n.put("available", a.nfc != null);
-        n.put("enabled", a.nfc != null && a.nfc.isEnabled());
+        n.put("available", a.nfcAdapter() != null);
+        n.put("enabled", a.nfcOn());
         n.put("status", a.nfcStatus());
         o.put("nfc", n);
         JSONObject u = new JSONObject();
@@ -336,7 +336,7 @@ final class AdminScreen {
             case "nfcTest":
                 a.nfcTesting = "start".equals(arg);
                 a.lastTagUid = "";
-                if (a.nfcTesting && a.nfc == null) adminToast("Dit toestel heeft geen NFC");
+                if (a.nfcTesting && a.nfcAdapter() == null) adminToast("Dit toestel heeft geen NFC");
                 a.applyRuntimeSettings();
                 break;
             case "nfcSettings":
