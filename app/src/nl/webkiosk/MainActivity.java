@@ -102,6 +102,7 @@ public class MainActivity extends Activity {
         for (long s : NFC_STARTUP_SECONDS) handler.postDelayed(nfcStartup, s * 1000L);
         web = createWeb();
         handler.postDelayed(liveCheck, LIVE_CHECK_MS);
+        mobile.start();
 
         lastBattery = registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
         IntentFilter wf = new IntentFilter(Intent.ACTION_SCREEN_ON);
@@ -220,16 +221,13 @@ public class MainActivity extends Activity {
             /** De wifi-verbinding: { connected, level 0-4, rssi (dBm), ssid?, link_speed (Mbps), frequency (MHz) } */
             /** Wifi; null als het toestel via de netwerkkabel internet heeft (zoals EventVOX-Pi): geen "geen wifi" in de terminal */
             @JavascriptInterface public String getWifi() { return "ethernet".equals(uplink()) ? "null" : wifiJson().toString(); }
-            /** Het netwerk: { uplink: ethernet|wifi|null, ethernet: { connected, speed_mbps? }|null }; de scanterminal toont via de kabel een kabel-icoon */
+            /**
+             * Het netwerk: { uplink: ethernet|wifi|mobile|null, ethernet: { connected, speed_mbps? }|null, mobile: { connected,
+             * sim, type?, level?, operator?, roaming }|null }; de scanterminal toont via de kabel een kabel-icoon, via mobiel
+             * de balkjes met 4G/5G
+             */
             @JavascriptInterface public String getNetwork() {
-                JSONObject o = new JSONObject();
-                try {
-                    String up = uplink();
-                    o.put("uplink", up == null ? JSONObject.NULL : up);
-                    JSONObject eth = ethernetJson();
-                    o.put("ethernet", eth == null ? JSONObject.NULL : eth);
-                } catch (Exception ignored) {}
-                return o.toString();
+                return networkJson().toString();
             }
             /** De staat van de app voor de heartbeat (EventVOX: terminalpagina); met log als om een diagnose is gevraagd */
             @JavascriptInterface public String getStatus() { return statusJson().toString(); }
@@ -755,8 +753,8 @@ public class MainActivity extends Activity {
         // Sneller: Android zoekt dan niet eerst naar tekst of een URL op de tag (NDEF) voordat de app de tag krijgt.
         // Alleen als niemand die nodig heeft (nfc_keyboard_value=ndef of nfc_read_ndef); in webkiosk-nfc is ndef dan leeg.
         if (!readNdef()) flags |= NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK;
-        // Geen piep van Android (nfc_sound uit): alleen het geluid van de pagina. Het vangnet (via Android) piept wel.
-        if (!prefs.getBoolean("nfc_sound", true)) flags |= NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS;
+        // Geen piep van Android (standaard; nfc_sound=true zet hem aan): alleen het geluid van de pagina. Het vangnet piept wel.
+        if (!prefs.getBoolean("nfc_sound", false)) flags |= NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS;
         // Vangnet: stond de lezer van de app (reader mode) toch niet aan, dan geeft Android de tag aan deze Activity
         // (onNewIntent) in plaats van alleen te piepen. Kan alleen terwijl de Activity op de voorgrond staat.
         if (resumed) try {
@@ -913,6 +911,20 @@ public class MainActivity extends Activity {
 
     /** Waarover het toestel nu internet heeft: "ethernet", "wifi" of null (geen, of iets anders zoals mobiel) */
     @SuppressWarnings("deprecation")
+    /** Zie getNetwork() */
+    JSONObject networkJson() {
+        JSONObject o = new JSONObject();
+        try {
+            String up = uplink();
+            o.put("uplink", up == null ? JSONObject.NULL : up);
+            JSONObject eth = ethernetJson();
+            o.put("ethernet", eth == null ? JSONObject.NULL : eth);
+            JSONObject m = mobile.json();
+            o.put("mobile", m == null ? JSONObject.NULL : m);
+        } catch (Exception ignored) {}
+        return o;
+    }
+
     String uplink() {
         try {
             android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
@@ -920,9 +932,13 @@ public class MainActivity extends Activity {
             if (ni == null || !ni.isConnected()) return null;
             if (ni.getType() == android.net.ConnectivityManager.TYPE_ETHERNET) return "ethernet";
             if (ni.getType() == android.net.ConnectivityManager.TYPE_WIFI) return "wifi";
+            if (ni.getType() == android.net.ConnectivityManager.TYPE_MOBILE) return "mobile";
         } catch (Exception ignored) {}
         return null;
     }
+
+    /** Mobiel internet (een Zebra met een modem) */
+    final Mobile mobile = new Mobile(this);
 
     String lastWifiSig = "";
     final BroadcastReceiver wifiReceiver = new BroadcastReceiver() {
@@ -1374,6 +1390,9 @@ public class MainActivity extends Activity {
             if (eth != null) o.put("ethernet", eth);
             String up = uplink();
             if (up != null) o.put("uplink", up);
+            // Een Zebra met een modem: mobiel internet (4G/5G)
+            JSONObject mob = mobile.json();
+            if (mob != null) o.put("mobile", mob);
             JSONObject u = new JSONObject();
             long checked = prefs.getLong("update_last_check", 0);
             if (checked > 0) u.put("checked_at", iso(checked));
@@ -2070,6 +2089,7 @@ public class MainActivity extends Activity {
 
 
     @Override protected void onDestroy() {
+        mobile.stop();
         handler.removeCallbacks(nfcStartup);
         try { unregisterReceiver(batteryReceiver); } catch (Exception ignored) {}
         try { unregisterReceiver(wakeReceiver); } catch (Exception ignored) {}

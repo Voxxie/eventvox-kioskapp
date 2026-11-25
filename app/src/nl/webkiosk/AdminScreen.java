@@ -125,7 +125,7 @@ final class AdminScreen {
         st.put("nfc_uid_format", a.prefs.getString("nfc_uid_format", "hex"));
         st.put("nfc_keyboard_value", a.prefs.getString("nfc_keyboard_value", "uid"));
         st.put("nfc_send_enter", a.prefs.getBoolean("nfc_send_enter", true));
-        st.put("nfc_sound", a.prefs.getBoolean("nfc_sound", true));
+        st.put("nfc_sound", a.prefs.getBoolean("nfc_sound", false));
         st.put("nfc_read_ndef", a.prefs.getBoolean("nfc_read_ndef", false));
         st.put("nfc_refresh_seconds", a.prefs.getInt("nfc_refresh_seconds", 0));
         st.put("auto_update", a.prefs.getBoolean("auto_update", true));

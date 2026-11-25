@@ -36,6 +36,8 @@ echo "ok   geen stubs in de APK"
 echo "== Java zonder Android"
 javac -nowarn -cp "$SDK" -d "$TMP/java" "$ROOT/app/src/nl/webkiosk/WifiProfiles.java" "$ROOT/tests/WifiQrTest.java"
 java -cp "$TMP/java:$SDK" WifiQrTest
+javac -nowarn -cp "$SDK" -d "$TMP/java" "$ROOT/app/src/nl/webkiosk/MobileType.java" "$ROOT/tests/MobileTypeAccess.java" "$ROOT/tests/MobileTypeTest.java"
+java -cp "$TMP/java:$SDK" MobileTypeTest
 
 echo "== Beheer- en netwerkscherm"
 node --check "$ROOT/app/assets/admin.js"
