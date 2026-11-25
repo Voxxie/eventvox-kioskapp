@@ -57,10 +57,27 @@ public class MainActivity extends Activity {
     NfcAdapter nfc;
     Intent lastBattery;
     String lastBatterySig = "";
+    String lastBatteryQuick = "";
+    Intent batteryCacheFor;
+    JSONObject batteryCache = new JSONObject();
+
+    /** De accu als JSON (Battery.batteryJson), één keer per melding van Android uitgerekend */
+    JSONObject batteryNow() {
+        Intent i = lastBattery;
+        if (i != batteryCacheFor) {
+            batteryCache = Battery.batteryJson(i);
+            batteryCacheFor = i;
+        }
+        return batteryCache;
+    }
     final BroadcastReceiver batteryReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
             lastBattery = i;
-            JSONObject b = Battery.batteryJson(i);
+            // Aan de lader meldt Android dit heel vaak (spanning, temperatuur): alleen bij een andere stand verder
+            String quick = Battery.quickSig(i);
+            if (quick.equals(lastBatteryQuick)) return;
+            lastBatteryQuick = quick;
+            JSONObject b = batteryNow();
             updateBatteryBanner(b);
             // alleen een event als er iets wezenlijks verandert (niet bij elke spanningswijziging)
             String sig = b.optInt("level") + "|" + b.optBoolean("charging") + "|" + b.optString("plugged") + "|" + b.optString("health");
@@ -214,7 +231,7 @@ public class MainActivity extends Activity {
         w.addJavascriptInterface(new Object() {
             @JavascriptInterface public boolean nfcAvailable() { return nfcAdapter() != null; }
             @JavascriptInterface public boolean nfcEnabled() { return nfcOn(); }
-            @JavascriptInterface public String getBattery() { return Battery.batteryJson(lastBattery).toString(); }
+            @JavascriptInterface public String getBattery() { return batteryNow().toString(); }
             @JavascriptInterface public String getSerial() { return serial(); }
             /** pattern: JSON-array in ms (aan, uit, aan, ...) of één getal; [] of 0 stopt het trillen. */
             @JavascriptInterface public boolean vibrate(String pattern) { return doVibrate(pattern); }
@@ -1106,11 +1123,11 @@ public class MainActivity extends Activity {
             public void uncaughtException(Thread t, Throwable e) {
                 try {
                     long now = System.currentTimeMillis();
-                    String recent = recentTimes(prefs.getString("app_crash_times", ""), now) + now;
+                    String recent = Policies.recentTimes(prefs.getString("app_crash_times", ""), now) + now;
                     int inMinute = recent.split(",").length;
                     prefs.edit().putInt("app_crashes", prefs.getInt("app_crashes", 0) + 1).putLong("app_crash_at", now)
                         .putString("app_crash_times", recent).commit();
-                    KioskLog.add(MainActivity.this, "App gecrasht: " + crashText(e) + (t == Looper.getMainLooper().getThread() ? "" : " (" + t.getName() + ")"));
+                    KioskLog.add(MainActivity.this, "App gecrasht: " + Policies.crashText(e) + (t == Looper.getMainLooper().getThread() ? "" : " (" + t.getName() + ")"));
                     long delay = inMinute >= 3 ? 30000 : 1500;
                     if (inMinute >= 3) KioskLog.add(MainActivity.this, "Herstel: 3 app-crashes binnen een minuut, 30 s wachten");
                     Intent i = new Intent(MainActivity.this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
@@ -1123,33 +1140,6 @@ public class MainActivity extends Activity {
                 if (previous != null) previous.uncaughtException(t, e); // niet bereikt; voor de volledigheid
             }
         });
-    }
-
-    /** Tijden (ms, met komma's, eindigend op een komma) van de vorige crashes binnen een minuut voor now */
-    static String recentTimes(String list, long now) {
-        StringBuilder sb = new StringBuilder();
-        for (String x : list.split(",")) {
-            try { long at = Long.parseLong(x.trim()); if (now - at < 60000) sb.append(at).append(','); } catch (NumberFormatException ignored) {}
-        }
-        return sb.toString();
-    }
-
-    /** Soort fout en de eerste plek in de app ("NullPointerException in MainActivity.typeText:1712"), zonder de fouttekst */
-    static String crashText(Throwable e) {
-        Throwable root = e;
-        while (root.getCause() != null && root.getCause() != root) root = root.getCause();
-        String where = "";
-        for (Throwable x : new Throwable[]{root, e}) {
-            for (StackTraceElement f : x.getStackTrace()) {
-                if (f.getClassName().startsWith("nl.webkiosk")) {
-                    String c = f.getClassName();
-                    where = " in " + c.substring(c.lastIndexOf('.') + 1) + "." + f.getMethodName() + ":" + f.getLineNumber();
-                    break;
-                }
-            }
-            if (!where.isEmpty()) break;
-        }
-        return root.getClass().getSimpleName() + where;
     }
 
     // ---------- geheugen ----------
@@ -1959,7 +1949,6 @@ public class MainActivity extends Activity {
 
     long lastTouch = 0;
     volatile boolean updateBusy = false;
-    static final long IDLE_BEFORE_INSTALL_MS = 120000;
 
     String updateUrl() {
         String u = prefs.getString("update_url", "");
@@ -2020,23 +2009,18 @@ public class MainActivity extends Activity {
      * nacht is (00:00-06:00). Wacht een update al 24 uur, dan is de lader of de nacht niet meer nodig (een toestel dat
      * nooit aan de lader gaat, krijgt hem ook). Nu bijwerken (EventVOX of het beheerscherm) installeert altijd meteen.
      */
-    static final long NO_SCAN_BEFORE_INSTALL_MS = 60 * 60000L;
-    static final long UPDATE_WAIT_MAX_MS = 24 * 3600000L;
     /** Laatste scan of tag (System.currentTimeMillis), 0: nog geen */
     volatile long lastScanWallAt = 0;
     long updatePendingSince = 0;
     int updatePendingCode = 0;
 
-    /** Waarom een klaarstaande update nog wacht; null: hij mag nu */
+    /** Waarom een klaarstaande update nog wacht; null: hij mag nu (de regel zelf: Policies.installWaitReason) */
     String installWaitReason() {
         long now = System.currentTimeMillis();
-        if (lastTouch != 0 && SystemClock.uptimeMillis() - lastTouch < IDLE_BEFORE_INSTALL_MS) return "het toestel wordt gebruikt";
-        if (lastScanWallAt != 0 && now - lastScanWallAt < NO_SCAN_BEFORE_INSTALL_MS) return "minder dan een uur na de laatste scan";
-        if (now - updatePendingSince >= UPDATE_WAIT_MAX_MS) return null;
-        boolean charging = !"none".equals(Battery.batteryJson(lastBattery).optString("plugged", "none"));
+        boolean charging = !"none".equals(batteryNow().optString("plugged", "none"));
         int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
-        if (!charging && hour >= 6) return "niet aan de lader (of 's nachts)";
-        return null;
+        return Policies.installWaitReason(lastTouch == 0 ? -1 : SystemClock.uptimeMillis() - lastTouch,
+            lastScanWallAt == 0 ? -1 : now - lastScanWallAt, now - updatePendingSince, charging, hour);
     }
 
     void installWhenIdle(final Updater.Info info) {

@@ -33,6 +33,17 @@ final class Battery {
         return m.startsWith("CC600") || m.startsWith("CC6000");
     }
 
+    /**
+     * Wat er voor de pagina en de meldingen toe doet (niveau, laden, lader, gezondheid, aanwezig), zonder alles uit te
+     * lezen: Android meldt de accu aan de lader heel vaak, meestal alleen met een andere spanning of temperatuur.
+     */
+    static String quickSig(Intent i) {
+        if (i == null) return "";
+        return i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) + "/" + i.getIntExtra(BatteryManager.EXTRA_SCALE, 100) + "|"
+            + i.getIntExtra(BatteryManager.EXTRA_STATUS, -1) + "|" + i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) + "|"
+            + i.getIntExtra(BatteryManager.EXTRA_HEALTH, 0) + "|" + i.getBooleanExtra(BatteryManager.EXTRA_PRESENT, true);
+    }
+
     static JSONObject batteryJson(Intent i) {
         JSONObject o = new JSONObject();
         if (i == null) return o;
