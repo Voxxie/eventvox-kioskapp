@@ -72,7 +72,8 @@ De hulpklassen (`NetworkScreen`, `AdminScreen`, `FindMe`) krijgen de Activity me
 | `DataWedge.java` | Eigen DataWedge-profiel "EventVOX-Webkiosk" (scanner aan, toetsaanslagen uit, scan als intent `nl.webkiosk.SCAN`). |
 | `TokenVault.java` | Geheim versleuteld in de Android Keystore (AES-GCM): het terminal-token van de scanterminal. |
 | `Mobile.java` / `MobileType.java` | Mobiel internet (modem, 4G/5G): `json()` voor `getNetwork()`/`getStatus()`, `PhoneStateListener` voor signaal en (Android 11+) 5G NSA (stub `TelephonyDisplayInfo`), event `webkiosk-network`; `MobileType.name()` zonder Android (getest in `tests/MobileTypeTest.java`). |
-| `KioskLog.java` | Logboek op het toestel (laatste 300 regels) voor diagnose. |
+| `KioskLog.java` | Logboek op het toestel (laatste 300 regels) voor diagnose; het bestand groeit tot 350 regels en wordt dan in één keer ingekort (bijna elke regel is een toevoeging). |
+| `Policies.java` | Regels zonder Android, getest in `tests/PoliciesTest.java`: `installWaitReason()` (wanneer een update mag installeren), `recentTimes()`/`crashText()` (crash van de app). Nieuwe logica die zonder Android kan: hier of in een eigen klasse, met een test. |
 | `app/assets/admin.*` | Beheerscherm (HTML, opent na 10× tikken op dezelfde plek + PIN of een beheer-QR-code). Een overzicht (statustegels, snelle acties, menu) en detailschermen (`.view[data-view]`, `go()`); zeldzame opties onder *Meer opties*; instellingen uit EventVOX krijgen *via EventVOX* (`remoteKeys`). Praat via `window.Kiosk`. |
 | `app/assets/wifi.*` | Scherm "Netwerk toevoegen" (offline): wifi-QR-code of netwerk in de buurt. Praat via `window.WifiQr`. |
 | `app/stubs/` | Alleen om te compileren (zie boven). |
@@ -146,7 +147,7 @@ in), dan vervalt de kopie. Verander die sleutelnaam nooit zonder de frontend mee
 
 - Beheerscherm: 10× tikken op dezelfde plek (max 0,7 s ertussen) + PIN; 5× fout = 1 min geblokkeerd; staat de PIN nog
   op de standaard 1234, dan eerst een eigen PIN kiezen (1234 wordt geweigerd). Sluit na 3 min zonder aanraking.
-- Updates: 1 minuut na de start en handmatig (`update_check_hours` = 0). Automatisch installeren (`installWaitReason()`)
+- Updates: 1 minuut na de start en handmatig (`update_check_hours` = 0). Automatisch installeren (`Policies.installWaitReason()`)
   pas na 2 minuten zonder aanraking, een uur zonder scan of tag (`lastScanWallAt`: NFC, DataWedge, Enter van een
   toetsenbord-scanner), en aan de lader of 's nachts (00–06); wacht hij al 24 uur, dan zonder lader/nacht. Waarom hij
   wacht staat in `update_last_result` (*nieuw: x (wacht: …)*). `updateNow()` en *Nu installeren* wachten niet.
@@ -162,6 +163,7 @@ in), dan vervalt de kopie. Verander die sleutelnaam nooit zonder de frontend mee
 - NFC-vangnet: naast reader mode staat `enableForegroundDispatch` aan (in `startNfcForced`, uit in `onPause`). Stond
   reader mode toch niet aan (het toestel piept, de pagina krijgt niets), dan komt de tag via `onNewIntent`
   (`tagFromAndroid`) alsnog in `handleTag`, en gaat de lezer opnieuw aan. Geen UID in het logboek.
+- Accu: `batteryReceiver` gaat alleen verder bij een andere `Battery.quickSig()` (niveau, laden, lader, gezondheid); `batteryNow()` rekent de JSON één keer per melding uit.
 - Crash van de pagina (`onRenderProcessGone`): nieuwe WebView; 3× binnen een minuut: 30 s wachten.
 - Crash van de app zelf: `installCrashGuard()` (eerste regel na `prefs` in `onCreate`) zet soort fout + plek in de
   code in het logboek (nooit de fouttekst), telt `app_crashes`/`app_crash_at` (in `getStatus()` als `app_crashes`,

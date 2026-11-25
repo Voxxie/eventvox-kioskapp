@@ -193,7 +193,7 @@ final class AdminScreen {
         sc.put("status", a.prefs.getString("dw_status", ""));
         sc.put("last", a.lastScan);
         o.put("scanner", sc);
-        o.put("battery", Battery.batteryJson(a.lastBattery));
+        o.put("battery", a.batteryNow());
         return o;
     }
 
@@ -297,7 +297,7 @@ final class AdminScreen {
             a.applyRuntimeSettings();
             a.applyVolume();
             a.applyOrientation();
-            if (a.lastBattery != null) a.updateBatteryBanner(Battery.batteryJson(a.lastBattery));
+            if (a.lastBattery != null) a.updateBatteryBanner(a.batteryNow());
             if (a.dimmed) a.setBrightness(-1f);
             a.schedulePeriodicReload();
             a.handler.removeCallbacks(a.updateCheck);

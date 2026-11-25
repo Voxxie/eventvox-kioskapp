@@ -11,6 +11,9 @@ import java.util.*;
  */
 public class KioskLog {
     private static final int MAX = 300;
+    /** Het bestand mag tot MAX + SLACK regels groeien en wordt dan in één keer ingekort tot MAX: zo is bijna elke
+     * regel een korte toevoeging, niet elke keer het hele bestand opnieuw (dat gebeurt vaak op de hoofdthread). */
+    private static final int SLACK = 50;
     private static final String FILE = "kiosk.log";
     private static final LinkedList<String> lines = new LinkedList<>();
     private static boolean loaded = false;
@@ -23,7 +26,7 @@ public class KioskLog {
         try (BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(file(c)), "UTF-8"))) {
             String l;
             while ((l = r.readLine()) != null) lines.add(l);
-            while (lines.size() > MAX) lines.removeFirst();
+            while (lines.size() > MAX + SLACK) lines.removeFirst();
         } catch (Exception ignored) {}
     }
 
@@ -32,7 +35,7 @@ public class KioskLog {
         String line = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).format(new Date()) + " " + text.replace('\n', ' ');
         lines.add(line);
         boolean trimmed = false;
-        while (lines.size() > MAX) { lines.removeFirst(); trimmed = true; }
+        if (lines.size() > MAX + SLACK) { while (lines.size() > MAX) lines.removeFirst(); trimmed = true; }
         try {
             if (trimmed) {
                 try (Writer w = new OutputStreamWriter(new FileOutputStream(file(c), false), "UTF-8")) { for (String l : lines) w.write(l + "\n"); }
@@ -45,7 +48,9 @@ public class KioskLog {
     public static synchronized String text(Context c) {
         load(c);
         StringBuilder sb = new StringBuilder();
-        for (String l : lines) sb.append(l).append('\n');
+        // Alleen de laatste MAX (het bestand kan er even SLACK meer hebben)
+        int skip = Math.max(0, lines.size() - MAX), n = 0;
+        for (String l : lines) if (n++ >= skip) sb.append(l).append('\n');
         return sb.toString();
     }
 }
