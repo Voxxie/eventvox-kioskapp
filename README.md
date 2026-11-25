@@ -109,9 +109,9 @@ Je kunt alles testen met `nfc-test.html`.
 - Standaard zoekt Android niet eerst naar tekst of een URL op de tag (NDEF): de tag-ID is dan sneller in de pagina. In
   het event is `ndef` dan leeg. Wil je die inhoud wel: `nfc_read_ndef=true` (Beheermenu > NFC > Meer opties), of
   `nfc_keyboard_value=ndef` (dan altijd).
-- `nfc_sound=false` (Beheermenu > NFC > *Piep van Android bij een tag*): geen piep van Android, alleen het geluid van de
-  website (de scanterminal laat al horen of de scan goed of fout is). Standaard aan. Een tag via het vangnet (zie
-  hieronder) piept altijd.
+- Standaard piept Android niet bij een tag: je hoort alleen het geluid van de website (de scanterminal laat al horen of
+  de scan goed of fout is). De piep weer aan: `nfc_sound=true` (Beheermenu > NFC > *Piep van Android bij een tag*, of
+  via EventVOX). Een tag via het vangnet (zie hieronder) piept altijd.
 
 ### NFC na slaapstand
 Op Android (ook Zebra) stopt NFC soms na slaapstand: na scherm-uit/aan is de *reader mode* van de app niet meer actief.
@@ -218,6 +218,16 @@ de pagina nog leeft. Dat doet hij ook elke 5 minuten als het toestel even (een m
 staat; dan krijgt de pagina 10 seconden (*pagina reageert niet bij de controle*). Antwoordt die niet binnen 3 seconden, of is hij leeg, dan laadt de app de website opnieuw (zoals na
 een crash; niet verstuurde scans bewaart de scanterminal zelf). In het logboek staat dan *Herladen: pagina reageert niet
 na slaapstand*, en na elke slaapstand van meer dan een minuut *Scherm aan na … slaapstand*. Bij elke start staat ook de versie van de WebView in het logboek.
+
+## Mobiel internet (4G/5G)
+Heeft de Zebra een modem met een simkaart (zoals een TC56, TC57 of TC58), dan geeft de app door of hij via mobiel
+internet werkt, de soort netwerk (2G, 3G, 4G, 4G+, 5G), de signaalsterkte (0-4), de provider en of hij roamt. De
+scanterminal toont dan, als het toestel via mobiel internet werkt, signaalbalkjes met *4G* of *5G* erbij in plaats van
+de wifi-balkjes; in EventVOX staat het bij de terminal. In het logboek staat wanneer mobiel internet verbonden of weg
+is (zonder signaalwisselingen). Een toestel zonder modem (de TC51) merkt er niets van.
+
+5G naast 4G (NSA, het meest gebruikte 5G in Nederland) meldt Android pas vanaf Android 11; op oudere toestellen staat
+daar *4G*. Een toestel met Android 8.1 kan geen 5G.
 
 ## Zebra CC600 / CC6000 (zonder accu, met netwerkkabel)
 De app werkt ook op de kiosk-toestellen voor op de balie. Die hebben geen accu: de app meldt dan *geen accu*

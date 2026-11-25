@@ -71,6 +71,7 @@ De hulpklassen (`NetworkScreen`, `AdminScreen`, `FindMe`) krijgen de Activity me
 | `WifiProfiles.java` | Wifi uit `webkiosk.properties`, wifi-QR-codes (`parseQr`), toevoegen/verbinden, netwerken in de buurt. |
 | `DataWedge.java` | Eigen DataWedge-profiel "EventVOX-Webkiosk" (scanner aan, toetsaanslagen uit, scan als intent `nl.webkiosk.SCAN`). |
 | `TokenVault.java` | Geheim versleuteld in de Android Keystore (AES-GCM): het terminal-token van de scanterminal. |
+| `Mobile.java` / `MobileType.java` | Mobiel internet (modem, 4G/5G): `json()` voor `getNetwork()`/`getStatus()`, `PhoneStateListener` voor signaal en (Android 11+) 5G NSA (stub `TelephonyDisplayInfo`), event `webkiosk-network`; `MobileType.name()` zonder Android (getest in `tests/MobileTypeTest.java`). |
 | `KioskLog.java` | Logboek op het toestel (laatste 300 regels) voor diagnose. |
 | `app/assets/admin.*` | Beheerscherm (HTML, opent na 10× tikken op dezelfde plek + PIN of een beheer-QR-code). Een overzicht (statustegels, snelle acties, menu) en detailschermen (`.view[data-view]`, `go()`); zeldzame opties onder *Meer opties*; instellingen uit EventVOX krijgen *via EventVOX* (`remoteKeys`). Praat via `window.Kiosk`. |
 | `app/assets/wifi.*` | Scherm "Netwerk toevoegen" (offline): wifi-QR-code of netwerk in de buurt. Praat via `window.WifiQr`. |
@@ -106,10 +107,10 @@ de frontend toont "Kiosk-app" (`kioskAppText`).
 | `nfcAvailable()`, `nfcEnabled()` | boolean |
 | `getBattery()` | JSON `{ present, level, charging, full, plugged, health, temperature, voltage, technology, pack?, raw }`; `present` false: geen accu (Zebra CC600/CC6000, `Battery.noBatteryModel()`), dan alleen `{ present, level 100, charging, full, plugged }` en `navigator.getBattery()` zoals een toestel zonder accu (`chargingTime` 0); `pack` = Zebra-accu `{ percent, cycles, decommission, serial, part_number, manufactured, rated_capacity }` |
 | `getWifi()` | JSON `{ connected, enabled, level 0-4, rssi, ssid?, link_speed, frequency }`; `null` als het toestel via de netwerkkabel internet heeft (zoals EventVOX-Pi), dan ook geen `webkiosk-wifi` |
-| `getNetwork()` | JSON `{ uplink: ethernet\|wifi\|null, ethernet: { connected, speed_mbps? }\|null }`; via de kabel toont de scanterminal een kabel-icoon in plaats van de wifi-balkjes |
+| `getNetwork()` | JSON `{ uplink: ethernet\|wifi\|mobile\|null, ethernet: { connected, speed_mbps? }\|null, mobile: { connected, sim, type? (2G\|3G\|4G\|4G+\|5G), level? 0-4, operator?, roaming }\|null }`; via de kabel toont de scanterminal een kabel-icoon in plaats van de wifi-balkjes, via mobiel de balkjes met 4G/5G; `mobile` null zonder modem (TC51) |
 | `getSerial()`, `getDeviceInfo()` | serienummer; JSON `{ serial, model, manufacturer, android, sdk, build, appVersion }` |
 | `vibrate(pattern)` | trillen (JSON-array of getal, zoals `navigator.vibrate`) |
-| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, app_crashes, last_app_crash_at?, nfc_restarts, clock_skew_s, settings_version, command_done, orientation, wifi, ethernet? { connected, speed_mbps? } (alleen met een netwerkpoort), uplink? (ethernet|wifi), wifi_version (altijd, ook leeg: de backend stuurt `kiosk_wifi` alleen als dit veld er is), wifi_result?, update { checked_at, result }, location?, log? }`; `location` `{ lat, lon, accuracy_m, provider, at, wifi { ssid, bssid, rssi } }` alleen in de 10 minuten na Zoek mij; `log` alleen de eerste keer na `requestDiagnostics()` |
+| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, app_crashes, last_app_crash_at?, nfc_restarts, clock_skew_s, settings_version, command_done, orientation, wifi, ethernet? { connected, speed_mbps? } (alleen met een netwerkpoort), uplink? (ethernet|wifi|mobile), mobile? (zoals in `getNetwork`, alleen met een modem), wifi_version (altijd, ook leeg: de backend stuurt `kiosk_wifi` alleen als dit veld er is), wifi_result?, update { checked_at, result }, location?, log? }`; `location` `{ lat, lon, accuracy_m, provider, at, wifi { ssid, bssid, rssi } }` alleen in de 10 minuten na Zoek mij; `log` alleen de eerste keer na `requestDiagnostics()` |
 | `requestDiagnostics()` | het logboek gaat mee met de volgende `getStatus()` |
 | `command(json)` | opdracht uit EventVOX `{ id, command: reload\|restart\|update\|locate\|refresh_screen }` (`refresh_screen`: Scherm opfrissen, `ScreenRefresh`: hoogstens 3 uur wisselende kleuren op volle helderheid tegen beeldretentie; een tik, toets, scan of tag stopt het); elke id één keer (`last_command_id`), gemeld als `command_done` in `getStatus()` |
 | `applySettings(json)` | instellingen uit EventVOX `{ version, values }`; elke versie één keer, via `applySetting()` (nooit `url`, `pin`, `update_url`) |
@@ -117,8 +118,9 @@ de frontend toont "Kiosk-app" (`kioskAppText`).
 | `setWifiProfiles(json)` | wifi-netwerken uit EventVOX (admin-tenant) `{ version, networks: [{ ssid, security WPA\|WEP\|OPEN, password, hidden, priority }] }`; alleen een andere versie, alleen als device owner; haalt alleen eerder uit EventVOX gekregen netwerken weg (`wifi_ev_ssids`), nooit die uit het config-bestand of een wifi-QR-code |
 
 **Events** op `window`: `webkiosk-nfc` `{ uid, uidHex, techs, ndef: [{type, value}] }`, `webkiosk-scan`
-`{ data, symbology }`, `webkiosk-battery` (zoals `getBattery`), `webkiosk-wifi` (zoals `getWifi`); ook als functies
-`window.onWebKioskNfc` / `onWebKioskScan` / `onWebKioskBattery` / `onWebKioskWifi`.
+`{ data, symbology }`, `webkiosk-battery` (zoals `getBattery`), `webkiosk-wifi` (zoals `getWifi`), `webkiosk-network`
+(zoals `getNetwork`, alleen op een toestel met een modem, bij een andere stand); ook als functies
+`window.onWebKioskNfc` / `onWebKioskScan` / `onWebKioskBattery` / `onWebKioskWifi` / `onWebKioskNetwork`.
 
 **De app levert zelf** (vóór de scripts van de pagina, bij `onPageStarted`/`onPageCommitVisible`/`onPageFinished`):
 `navigator.getBattery()` (altijd die van de app; `chargingTime` Infinity, zodat een volle accu aan de lader niet als
@@ -165,7 +167,7 @@ in), dan vervalt de kopie. Verander die sleutelnaam nooit zonder de frontend mee
   en zonder beheer-/netwerkscherm, 10 s de tijd). Geheugen krap (`onTrimMemory`): in het logboek; heel krap en rustig:
   `clearCache(false)`.
 - NFC: `FLAG_READER_SKIP_NDEF_CHECK` tenzij `readNdef()` (`nfc_keyboard_value=ndef` of `nfc_read_ndef`); dan is
-  `ndef` in `webkiosk-nfc` leeg (het veld blijft). `nfc_sound=false`: `FLAG_READER_NO_PLATFORM_SOUNDS`.
+  `ndef` in `webkiosk-nfc` leeg (het veld blijft). `nfc_sound` (standaard false): zonder `FLAG_READER_NO_PLATFORM_SOUNDS` alleen met `nfc_sound=true`.
 - Na de slaapstand (scherm aan, ontgrendelen, terug na > 1 min): `wakeCheck()` vraagt de pagina een teken van leven; geen
   antwoord binnen 3 s of een lege pagina: nieuwe WebView, anders alleen opnieuw tekenen (tegen een wit scherm). Bij
   het starten staat de WebView-versie in het logboek.
