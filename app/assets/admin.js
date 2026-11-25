@@ -125,13 +125,28 @@
         t.classList.toggle('bad', level === 'bad');
     }
 
+    /** Mobiel internet in het netwerkscherm; niets op een toestel zonder modem (m null) */
+    function mobileRows(m, via) {
+        if (!m) return [];
+        if (m.sim === false) return [['Mobiel', '<span style="color:var(--red)">geen simkaart</span>']];
+        if (!m.connected) return [['Mobiel', 'niet verbonden']];
+        return [
+            ['Mobiel', esc((m.type || 'verbonden') + (m.operator ? ' · ' + m.operator : '') + (m.roaming ? ' · roaming' : ''))],
+            ['Signaal mobiel', esc(m.level != null ? LEVEL[m.level] : '—')],
+            ['Internet via', via ? 'mobiel' : 'wifi'],
+        ];
+    }
+
     function render() {
         var s = state, st = s.settings || {};
         var h = s.health || {}, b = s.battery || {}, w = s.wifiNow || {}, sc = s.scanner || {}, n = s.nfc || {}, u = s.update || {};
         $('#top-sub').textContent = 'versie ' + s.version + ' · SN ' + s.serial;
 
         // Statustegels
-        tile('t-network', w.connected ? (w.level != null ? LEVEL[w.level] : 'verbonden') : 'geen verbinding',
+        // Via mobiel internet (een Zebra met een modem): 4G/5G en het signaal in de tegel
+        var m = s.mobile || null, viaMobile = s.uplink === 'mobile' && m && m.connected;
+        if (viaMobile) tile('t-network', (m.type ? m.type + ' · ' : '') + (m.level != null ? LEVEL[m.level] : 'verbonden'), m.level <= 1 ? 'warn' : '');
+        else tile('t-network', w.connected ? (w.level != null ? LEVEL[w.level] : 'verbonden') : 'geen verbinding',
             !w.connected ? 'bad' : w.level <= 1 ? 'warn' : '');
         tile('t-battery', b.level == null ? '—' : b.level + '%' + (b.charging ? ' ⚡' : ''),
             b.level == null || b.charging ? '' : st.low_battery && b.level <= st.low_battery ? 'bad' : b.level <= 30 ? 'warn' : '');
@@ -147,7 +162,8 @@
         $('#m-scan').textContent = 'Scanner ' + (st.datawedge === 'app' ? 'via de app' : 'eigen profielen') + ' · NFC ' + (PASS[st.nfc_mode] || '');
         $('#m-screen').textContent = [ORIENT[st.orientation], st.keep_screen_on ? 'scherm altijd aan' : '', st.volume_lock ? 'volume ' + st.volume_lock + '%' : '']
             .filter(Boolean).join(' · ');
-        $('#m-network').textContent = w.connected ? (w.ssid || 'verbonden') + ' · ' + LEVEL[w.level] : 'geen verbinding';
+        $('#m-network').textContent = viaMobile ? 'Mobiel ' + (m.type || '') + (m.operator ? ' · ' + m.operator : '')
+            : w.connected ? (w.ssid || 'verbonden') + ' · ' + LEVEL[w.level] : 'geen verbinding';
         $('#m-updates').textContent = 'versie ' + s.version + (u.lastResult ? ' · ' + u.lastResult : '') + (st.update_channel === 'beta' ? ' · testkanaal' : '');
         var clockOff = h.clock && !/gelijk/.test(h.clock);
         var dev = $('#m-device');
@@ -194,7 +210,8 @@
             ['Verbonden met', esc(w.ssid || '(naam onbekend)')],
             ['Signaal', esc(LEVEL[w.level] + (w.rssi != null ? ' · ' + w.rssi + ' dBm' : ''))],
             ['Snelheid', w.link_speed ? esc(w.link_speed + ' Mbps · ' + (w.frequency >= 5000 ? '5' : '2,4') + ' GHz') : '—'],
-        ] : [['Wifi', '<span style="color:var(--red)">geen verbinding</span>']])
+        ] : [['Wifi', viaMobile ? 'niet verbonden' : '<span style="color:var(--red)">geen verbinding</span>']])
+            .concat(mobileRows(m, viaMobile))
             .map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('');
         $('#wifi-status').textContent = s.wifi || '';
 

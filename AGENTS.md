@@ -110,7 +110,7 @@ de frontend toont "Kiosk-app" (`kioskAppText`).
 | `getNetwork()` | JSON `{ uplink: ethernet\|wifi\|mobile\|null, ethernet: { connected, speed_mbps? }\|null, mobile: { connected, sim, type? (2G\|3G\|4G\|4G+\|5G), level? 0-4, operator?, roaming }\|null }`; via de kabel toont de scanterminal een kabel-icoon in plaats van de wifi-balkjes, via mobiel de balkjes met 4G/5G; `mobile` null zonder modem (TC51) |
 | `getSerial()`, `getDeviceInfo()` | serienummer; JSON `{ serial, model, manufacturer, android, sdk, build, appVersion }` |
 | `vibrate(pattern)` | trillen (JSON-array of getal, zoals `navigator.vibrate`) |
-| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, app_crashes, last_app_crash_at?, nfc_restarts, clock_skew_s, settings_version, command_done, orientation, wifi, ethernet? { connected, speed_mbps? } (alleen met een netwerkpoort), uplink? (ethernet|wifi|mobile), mobile? (zoals in `getNetwork`, alleen met een modem), wifi_version (altijd, ook leeg: de backend stuurt `kiosk_wifi` alleen als dit veld er is), wifi_result?, update { checked_at, result }, location?, log? }`; `location` `{ lat, lon, accuracy_m, provider, at, wifi { ssid, bssid, rssi } }` alleen in de 10 minuten na Zoek mij; `log` alleen de eerste keer na `requestDiagnostics()` |
+| `getStatus()` | JSON voor de heartbeat: `{ version, channel, uptime_s, crashes, last_crash_at, app_crashes, last_app_crash_at?, nfc_restarts, clock_skew_s, settings_version, command_done, orientation, nfc { available, enabled, mode, tags, fallback_tags, last_tag_at?, error? } (tellers sinds de start, geen UID), wifi, ethernet? { connected, speed_mbps? } (alleen met een netwerkpoort), uplink? (ethernet|wifi|mobile), mobile? (zoals in `getNetwork`, alleen met een modem), wifi_version (altijd, ook leeg: de backend stuurt `kiosk_wifi` alleen als dit veld er is), wifi_result?, update { checked_at, result }, location?, log? }`; `location` `{ lat, lon, accuracy_m, provider, at, wifi { ssid, bssid, rssi } }` alleen in de 10 minuten na Zoek mij; `log` alleen de eerste keer na `requestDiagnostics()` |
 | `requestDiagnostics()` | het logboek gaat mee met de volgende `getStatus()` |
 | `command(json)` | opdracht uit EventVOX `{ id, command: reload\|restart\|update\|locate\|refresh_screen }` (`refresh_screen`: Scherm opfrissen, `ScreenRefresh`: hoogstens 3 uur wisselende kleuren op volle helderheid tegen beeldretentie; een tik, toets, scan of tag stopt het); elke id één keer (`last_command_id`), gemeld als `command_done` in `getStatus()` |
 | `applySettings(json)` | instellingen uit EventVOX `{ version, values }`; elke versie één keer, via `applySetting()` (nooit `url`, `pin`, `update_url`) |
@@ -146,7 +146,10 @@ in), dan vervalt de kopie. Verander die sleutelnaam nooit zonder de frontend mee
 
 - Beheerscherm: 10× tikken op dezelfde plek (max 0,7 s ertussen) + PIN; 5× fout = 1 min geblokkeerd; staat de PIN nog
   op de standaard 1234, dan eerst een eigen PIN kiezen (1234 wordt geweigerd). Sluit na 3 min zonder aanraking.
-- Updates: 1 minuut na de start en handmatig (`update_check_hours` = 0); installeren pas na 2 minuten zonder gebruik.
+- Updates: 1 minuut na de start en handmatig (`update_check_hours` = 0). Automatisch installeren (`installWaitReason()`)
+  pas na 2 minuten zonder aanraking, een uur zonder scan of tag (`lastScanWallAt`: NFC, DataWedge, Enter van een
+  toetsenbord-scanner), en aan de lader of 's nachts (00–06); wacht hij al 24 uur, dan zonder lader/nacht. Waarom hij
+  wacht staat in `update_last_result` (*nieuw: x (wacht: …)*). `updateNow()` en *Nu installeren* wachten niet.
 - Offline 30 s: balk "Je bent offline" met knop "Netwerk toevoegen" (blokkeert de pagina niet; offline scannen gaat door).
   Een wifi-QR-code werkt buiten het beheerscherm alleen zonder netwerk.
 - Toetsen die het begin van `WIFI:` vormen worden max 100 ms vastgehouden (een mens typt trager dan een scanner) en
