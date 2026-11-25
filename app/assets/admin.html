@@ -136,6 +136,7 @@
         <div class="field"><label class="lbl" for="nfc_keyboard_value">Wat typen</label>
           <select id="nfc_keyboard_value" data-setting="nfc_keyboard_value"><option value="uid">Tag-ID</option><option value="ndef">Tekst of URL op de tag</option></select></div>
         <div class="toggle-row"><span>Enter na typen</span><label class="sw"><input type="checkbox" data-setting="nfc_send_enter"><i></i></label></div>
+        <div class="toggle-row"><span>Piep van Android bij een tag<small>uit: alleen het geluid van de pagina</small></span><label class="sw"><input type="checkbox" data-setting="nfc_sound"><i></i></label></div>
       </div>
       <details class="more"><summary>Meer opties</summary>
         <div class="card">
@@ -144,6 +145,7 @@
               <option value="hex">Hex — 04A1B2C3</option><option value="hex_reversed">Hex omgekeerd — C3B2A104</option>
               <option value="hex_colon">Hex met dubbele punten — 04:A1:B2:C3</option><option value="dec">Decimaal</option><option value="dec_reversed">Decimaal omgekeerd</option>
             </select></div>
+          <div class="toggle-row"><span>Tekst of URL op de tag lezen<small>voor het NFC-event; trager. Bij &ldquo;Wat typen: tekst&rdquo; altijd</small></span><label class="sw"><input type="checkbox" data-setting="nfc_read_ndef"><i></i></label></div>
           <div class="toggle-row"><span>NFC periodiek verversen<small>vangnet na slaapstand</small></span>
             <div class="stepper" data-setting="nfc_refresh_seconds" data-step="30" data-min="0" data-max="600" data-unit="s" data-zero="uit"></div></div>
           <div class="row">

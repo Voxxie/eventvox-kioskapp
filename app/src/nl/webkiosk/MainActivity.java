@@ -84,6 +84,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        installCrashGuard();
         dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
         admin = new ComponentName(this, AdminReceiver.class);
 
@@ -100,6 +101,7 @@ public class MainActivity extends Activity {
         if (nfc == null) KioskLog.add(this, "NFC nog niet beschikbaar bij het starten; later opnieuw");
         for (long s : NFC_STARTUP_SECONDS) handler.postDelayed(nfcStartup, s * 1000L);
         web = createWeb();
+        handler.postDelayed(liveCheck, LIVE_CHECK_MS);
 
         lastBattery = registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
         IntentFilter wf = new IntentFilter(Intent.ACTION_SCREEN_ON);
@@ -306,7 +308,7 @@ public class MainActivity extends Activity {
             if (uu != null) e.putString("update_url", uu.trim());
             String au = p.getProperty("auto_update");
             if (au != null) e.putBoolean("auto_update", Boolean.parseBoolean(au.trim()));
-            for (String key : new String[]{"nightly_reload"}) {
+            for (String key : new String[]{"nightly_reload", "nfc_sound", "nfc_read_ndef"}) {
                 String v = p.getProperty(key);
                 if (v != null) e.putBoolean(key, Boolean.parseBoolean(v.trim()));
             }
@@ -750,6 +752,11 @@ public class MainActivity extends Activity {
         if (!nfcOn()) { nfcError("NFC staat uit op het toestel"); return; } // NFC aan: ACTION_ADAPTER_STATE_CHANGED start hem
         int flags = NfcAdapter.FLAG_READER_NFC_A | NfcAdapter.FLAG_READER_NFC_B | NfcAdapter.FLAG_READER_NFC_F
                   | NfcAdapter.FLAG_READER_NFC_V | NfcAdapter.FLAG_READER_NFC_BARCODE;
+        // Sneller: Android zoekt dan niet eerst naar tekst of een URL op de tag (NDEF) voordat de app de tag krijgt.
+        // Alleen als niemand die nodig heeft (nfc_keyboard_value=ndef of nfc_read_ndef); in webkiosk-nfc is ndef dan leeg.
+        if (!readNdef()) flags |= NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK;
+        // Geen piep van Android (nfc_sound uit): alleen het geluid van de pagina. Het vangnet (via Android) piept wel.
+        if (!prefs.getBoolean("nfc_sound", true)) flags |= NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS;
         // Vangnet: stond de lezer van de app (reader mode) toch niet aan, dan geeft Android de tag aan deze Activity
         // (onNewIntent) in plaats van alleen te piepen. Kan alleen terwijl de Activity op de voorgrond staat.
         if (resumed) try {
@@ -774,6 +781,11 @@ public class MainActivity extends Activity {
         if (text.equals(nfcLastError)) return;
         nfcLastError = text;
         KioskLog.add(this, text);
+    }
+
+    /** Moet de inhoud van de tag (NDEF: tekst of URL) gelezen worden? */
+    boolean readNdef() {
+        return "ndef".equals(prefs.getString("nfc_keyboard_value", "uid")) || prefs.getBoolean("nfc_read_ndef", false);
     }
 
     static boolean isTagIntent(String action) {
@@ -943,20 +955,35 @@ public class MainActivity extends Activity {
         long now = SystemClock.uptimeMillis();
         if (now - lastWakeCheck < 5000) return;
         lastWakeCheck = now;
-        handler.postDelayed(new Runnable() { public void run() { wakeCheck(); } }, 800);
+        handler.postDelayed(new Runnable() { public void run() { wakeCheck("na slaapstand", 3000); } }, 800);
     }
 
-    void wakeCheck() {
+    /*
+     * Ook zonder slaapstand kan de pagina vastlopen (wit of bevroren scherm) zonder dat iemand het merkt. Elke 5 minuten,
+     * alleen als het toestel even niet gebruikt is (1 min), met het scherm aan en zonder beheer- of netwerkscherm: dezelfde
+     * controle als na de slaapstand, met 10 s de tijd (een drukke pagina is geen vastgelopen pagina).
+     */
+    static final long LIVE_CHECK_MS = 5 * 60000L;
+    final Runnable liveCheck = new Runnable() {
+        public void run() {
+            handler.postDelayed(liveCheck, LIVE_CHECK_MS);
+            if (!resumed || pageError || adminView != null || net.wifiView != null || screenRefresh.view != null) return;
+            if (SystemClock.uptimeMillis() - lastActivity < 60000 || !screenOn()) return;
+            wakeCheck("bij de controle", 10000);
+        }
+    };
+
+    void wakeCheck(final String when, long waitMs) {
         final WebView w = web;
         if (w == null || adminView != null) return;
         final boolean[] answered = {false};
         final Runnable noAnswer = new Runnable() {
             public void run() {
                 if (answered[0] || w != web) return;
-                rebuildWeb("pagina reageert niet na slaapstand", false);
+                rebuildWeb("pagina reageert niet " + when, false);
             }
         };
-        handler.postDelayed(noAnswer, 3000);
+        handler.postDelayed(noAnswer, waitMs);
         try {
             w.evaluateJavascript("(function(){var b=document.body;return document.readyState+'|'+(b?b.childElementCount:0);})()",
                 new ValueCallback<String>() {
@@ -966,7 +993,7 @@ public class MainActivity extends Activity {
                         if (w != web) return;
                         String s = v == null ? "" : v.replace("\"", "");
                         if (s.equals("complete|0")) {
-                            rebuildWeb("lege pagina na slaapstand", false);
+                            rebuildWeb("lege pagina " + when, false);
                         } else {
                             w.invalidate(); // het beeld opnieuw laten tekenen
                             w.requestLayout();
@@ -975,7 +1002,7 @@ public class MainActivity extends Activity {
                 });
         } catch (Exception e) {
             handler.removeCallbacks(noAnswer);
-            rebuildWeb("pagina reageert niet na slaapstand", false);
+            rebuildWeb("pagina reageert niet " + when, false);
         }
     }
 
@@ -1027,6 +1054,103 @@ public class MainActivity extends Activity {
         } else {
             loadHome();
         }
+    }
+
+    // ---------- crash van de app zelf ----------
+
+    /*
+     * Een fout in de app zelf (niet in de pagina) liet hem stoppen zonder spoor. Nu: de fout in het logboek (alleen de
+     * soort fout en waar, geen tekst: die kan gegevens bevatten), de teller voor EventVOX (app_crashes) en de app na
+     * 1,5 s opnieuw starten; na 3 crashes binnen een minuut pas na 30 s, anders blijft het rondgaan.
+     */
+    void installCrashGuard() {
+        final Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            public void uncaughtException(Thread t, Throwable e) {
+                try {
+                    long now = System.currentTimeMillis();
+                    String recent = recentTimes(prefs.getString("app_crash_times", ""), now) + now;
+                    int inMinute = recent.split(",").length;
+                    prefs.edit().putInt("app_crashes", prefs.getInt("app_crashes", 0) + 1).putLong("app_crash_at", now)
+                        .putString("app_crash_times", recent).commit();
+                    KioskLog.add(MainActivity.this, "App gecrasht: " + crashText(e) + (t == Looper.getMainLooper().getThread() ? "" : " (" + t.getName() + ")"));
+                    long delay = inMinute >= 3 ? 30000 : 1500;
+                    if (inMinute >= 3) KioskLog.add(MainActivity.this, "Herstel: 3 app-crashes binnen een minuut, 30 s wachten");
+                    Intent i = new Intent(MainActivity.this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 2, i, PendingIntent.FLAG_CANCEL_CURRENT);
+                    android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+                    if (am != null) am.set(android.app.AlarmManager.RTC, now + delay, pi);
+                } catch (Throwable ignored) {}
+                android.os.Process.killProcess(android.os.Process.myPid());
+                System.exit(10);
+                if (previous != null) previous.uncaughtException(t, e); // niet bereikt; voor de volledigheid
+            }
+        });
+    }
+
+    /** Tijden (ms, met komma's, eindigend op een komma) van de vorige crashes binnen een minuut voor now */
+    static String recentTimes(String list, long now) {
+        StringBuilder sb = new StringBuilder();
+        for (String x : list.split(",")) {
+            try { long at = Long.parseLong(x.trim()); if (now - at < 60000) sb.append(at).append(','); } catch (NumberFormatException ignored) {}
+        }
+        return sb.toString();
+    }
+
+    /** Soort fout en de eerste plek in de app ("NullPointerException in MainActivity.typeText:1712"), zonder de fouttekst */
+    static String crashText(Throwable e) {
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+        String where = "";
+        for (Throwable x : new Throwable[]{root, e}) {
+            for (StackTraceElement f : x.getStackTrace()) {
+                if (f.getClassName().startsWith("nl.webkiosk")) {
+                    String c = f.getClassName();
+                    where = " in " + c.substring(c.lastIndexOf('.') + 1) + "." + f.getMethodName() + ":" + f.getLineNumber();
+                    break;
+                }
+            }
+            if (!where.isEmpty()) break;
+        }
+        return root.getClass().getSimpleName() + where;
+    }
+
+    // ---------- geheugen ----------
+
+    /*
+     * De app draait dagen achter elkaar. Meldt Android dat het geheugen krap wordt, dan staat dat in het logboek (zo is
+     * een "pagina gestopt door Android (geheugen)" achteraf te verklaren); bij heel krap geheugen en een toestel dat even
+     * niet gebruikt wordt, gaat de cache van de pagina in het werkgeheugen weg (niet de opslag van de scanterminal).
+     */
+    int memoryLevelLogged = 0;
+    long memoryLoggedAt = 0;
+
+    @Override public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (level != TRIM_MEMORY_RUNNING_LOW && level != TRIM_MEMORY_RUNNING_CRITICAL) return;
+        long now = SystemClock.uptimeMillis();
+        if (level > memoryLevelLogged || now - memoryLoggedAt > 30 * 60000L) {
+            memoryLevelLogged = level;
+            memoryLoggedAt = now;
+            KioskLog.add(this, "Geheugen " + (level == TRIM_MEMORY_RUNNING_CRITICAL ? "heel krap" : "krap") + " (" + freeMemoryText() + ")");
+        }
+        if (level == TRIM_MEMORY_RUNNING_CRITICAL && web != null && now - lastActivity > 60000) {
+            try { web.clearCache(false); } catch (Exception ignored) {}
+        }
+    }
+
+    @Override public void onLowMemory() {
+        super.onLowMemory();
+        KioskLog.add(this, "Geheugen op (" + freeMemoryText() + ")");
+    }
+
+    String freeMemoryText() {
+        try {
+            android.app.ActivityManager am = (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
+            android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
+            am.getMemoryInfo(mi);
+            return (mi.availMem / 1048576) + " MB vrij van " + (mi.totalMem / 1048576) + " MB";
+        } catch (Exception e) { return "onbekend"; }
     }
 
     // ---------- terminal-identiteit bewaren (token van de EventVOX-scanterminal) ----------
@@ -1228,6 +1352,10 @@ public class MainActivity extends Activity {
             o.put("uptime_s", (System.currentTimeMillis() - startedAt) / 1000);
             o.put("crashes", renderCrashes);
             if (lastCrashAt > 0) o.put("last_crash_at", iso(lastCrashAt));
+            // Crashes van de app zelf (niet de pagina), opgeteld over herstarts heen
+            o.put("app_crashes", prefs.getInt("app_crashes", 0));
+            long appCrashAt = prefs.getLong("app_crash_at", 0);
+            if (appCrashAt > 0) o.put("last_app_crash_at", iso(appCrashAt));
             o.put("nfc_restarts", nfcRestarts);
             if (clockCheckedAt > 0) o.put("clock_skew_s", clockSkew);
             o.put("settings_version", prefs.getInt("remote_settings_version", 0));

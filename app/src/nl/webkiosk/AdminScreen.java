@@ -125,6 +125,8 @@ final class AdminScreen {
         st.put("nfc_uid_format", a.prefs.getString("nfc_uid_format", "hex"));
         st.put("nfc_keyboard_value", a.prefs.getString("nfc_keyboard_value", "uid"));
         st.put("nfc_send_enter", a.prefs.getBoolean("nfc_send_enter", true));
+        st.put("nfc_sound", a.prefs.getBoolean("nfc_sound", true));
+        st.put("nfc_read_ndef", a.prefs.getBoolean("nfc_read_ndef", false));
         st.put("nfc_refresh_seconds", a.prefs.getInt("nfc_refresh_seconds", 0));
         st.put("auto_update", a.prefs.getBoolean("auto_update", true));
         st.put("update_check_hours", a.prefs.getInt("update_check_hours", 0));
@@ -237,7 +239,7 @@ final class AdminScreen {
     }
 
     static final java.util.List<String> STRING_KEYS = java.util.Arrays.asList("nfc_mode", "nfc_uid_format", "nfc_keyboard_value", "scan_mode", "datawedge", "update_channel", "orientation");
-    static final java.util.List<String> BOOL_KEYS = java.util.Arrays.asList("nfc_send_enter", "auto_update", "keep_screen_on", "ignore_ssl_errors", "vibrate", "nightly_reload");
+    static final java.util.List<String> BOOL_KEYS = java.util.Arrays.asList("nfc_send_enter", "nfc_sound", "nfc_read_ndef", "auto_update", "keep_screen_on", "ignore_ssl_errors", "vibrate", "nightly_reload");
     static final java.util.List<String> INT_KEYS = java.util.Arrays.asList("nfc_refresh_seconds", "update_check_hours", "reload_minutes", "menu_taps", "volume_lock", "dim_minutes", "dim_level", "nightly_hour", "low_battery");
 
     /** Eén instelling opslaan en toepassen; geeft een foutmelding of null. */
