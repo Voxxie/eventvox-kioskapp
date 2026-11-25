@@ -118,6 +118,13 @@ starten nog een paar keer aan (na 3, 8, 15, 30, 60 en 120 s). In het logboek (Be
 EventVOX) staat het als NFC bij het starten nog niet klaar was (*NFC nog niet beschikbaar bij het starten*), wanneer hij
 alsnog gevonden is, en als het aanzetten van de lezer mislukte of NFC op het toestel uit staat.
 
+### Piept bij een tag, maar er gebeurt niets
+Het toestel piept zodra het een tag ziet, ook als de lezer van de app op dat moment niet aan staat. Dan ging de tag naar
+Android zelf en kwam hij niet in de pagina. De app vangt zo'n tag nu ook op (een vangnet naast de eigen lezer), geeft hem
+gewoon door en zet de lezer opnieuw aan. In het logboek staat dan *NFC-tag kwam via Android binnen*. Verder staan in het
+logboek de eerste tag die na het starten aan de pagina is gegeven, en of de pagina de focus niet kreeg (dan komen de
+toetsaanslagen niet aan).
+
 Werkt het op een toestel toch niet goed:
 - Beheermenu > NFC > **Periodiek verversen** (of `nfc_refresh_seconds=30`) als extra vangnet;
 - Beheermenu > NFC > **NFC nu herstarten** toont ook wanneer en waarom reader mode het laatst is herstart;

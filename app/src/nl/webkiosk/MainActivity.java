@@ -1,6 +1,7 @@
 package nl.webkiosk;
 
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.app.admin.DevicePolicyManager;
 import android.content.*;
 import android.content.pm.PackageManager;
@@ -532,6 +533,7 @@ public class MainActivity extends Activity {
         handler.removeCallbacks(nfcRestart);
         handler.removeCallbacks(nfcPeriodic);
         if (nfc != null) try { nfc.disableReaderMode(this); } catch (Exception ignored) {}
+        if (nfc != null) try { nfc.disableForegroundDispatch(this); } catch (Exception ignored) {}
         super.onPause();
     }
 
@@ -542,6 +544,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onNewIntent(Intent i) {
         super.onNewIntent(i);
+        if (i != null && isTagIntent(i.getAction())) { tagFromAndroid(i); return; }
         if (i != null && i.getBooleanExtra("provisioned", false)) { applyDeviceOwnerPolicies(); applyProvisionExtras(); loadHome(); return; }
         if (i != null && i.getExtras() != null && (i.hasExtra("url") || i.hasExtra("pin"))) {
             readIntentConfig(i);
@@ -747,6 +750,15 @@ public class MainActivity extends Activity {
         if (!nfcOn()) { nfcError("NFC staat uit op het toestel"); return; } // NFC aan: ACTION_ADAPTER_STATE_CHANGED start hem
         int flags = NfcAdapter.FLAG_READER_NFC_A | NfcAdapter.FLAG_READER_NFC_B | NfcAdapter.FLAG_READER_NFC_F
                   | NfcAdapter.FLAG_READER_NFC_V | NfcAdapter.FLAG_READER_NFC_BARCODE;
+        // Vangnet: stond de lezer van de app (reader mode) toch niet aan, dan geeft Android de tag aan deze Activity
+        // (onNewIntent) in plaats van alleen te piepen. Kan alleen terwijl de Activity op de voorgrond staat.
+        if (resumed) try {
+            PendingIntent pi = PendingIntent.getActivity(this, 0,
+                new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
+            nfc.enableForegroundDispatch(this, pi, null, null);
+        } catch (Exception e) {
+            nfcError("NFC-vangnet aanzetten mislukt: " + e.getClass().getSimpleName());
+        }
         try {
             nfc.enableReaderMode(this, new NfcAdapter.ReaderCallback() {
                 public void onTagDiscovered(Tag tag) { handleTag(tag); }
@@ -763,6 +775,26 @@ public class MainActivity extends Activity {
         nfcLastError = text;
         KioskLog.add(this, text);
     }
+
+    static boolean isTagIntent(String action) {
+        return NfcAdapter.ACTION_TAG_DISCOVERED.equals(action) || NfcAdapter.ACTION_TECH_DISCOVERED.equals(action)
+            || NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action);
+    }
+
+    /**
+     * Een tag die via Android binnenkwam (het vangnet, enableForegroundDispatch): de lezer van de app stond niet aan,
+     * terwijl het toestel de tag wel zag en piepte. Gewoon doorgeven, de lezer opnieuw aanzetten en in het logboek.
+     */
+    void tagFromAndroid(Intent i) {
+        final Tag tag = i.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+        if (tag == null) return;
+        nfcError("NFC-tag kwam via Android binnen (de lezer van de app stond niet aan); lezer opnieuw aan");
+        restartNfc("tag via Android");
+        new Thread(new Runnable() { public void run() { handleTag(tag); } }).start();
+    }
+
+    /** Hoeveel tags sinds het starten aan de pagina zijn gegeven (de eerste komt in het logboek) */
+    int nfcDelivered = 0;
 
     /** Wordt op een achtergrondthread aangeroepen. */
     void handleTag(Tag tag) {
@@ -809,6 +841,8 @@ public class MainActivity extends Activity {
             return;
         }
         String mode = prefs.getString("nfc_mode", "both");
+        if (web == null) { KioskLog.add(this, "NFC-tag niet doorgegeven: geen pagina"); return; }
+        if (nfcDelivered++ == 0) KioskLog.add(this, "Eerste NFC-tag doorgegeven aan de pagina (" + mode + ")");
         if (mode.equals("event") || mode.equals("both")) {
             String js = "(function(d){try{window.dispatchEvent(new CustomEvent('webkiosk-nfc',{detail:d}));}catch(e){}"
                       + "if(typeof window.onWebKioskNfc==='function')window.onWebKioskNfc(d);})(" + o.toString() + ");";
@@ -1686,14 +1720,18 @@ public class MainActivity extends Activity {
     void typeText(String text, boolean enter) {
         // Scherm opfrissen: een scan of NFC-tag stopt het en gaat niet naar de pagina
         if (screenRefresh.view != null) { screenRefresh.stop("gestopt met een scan"); return; }
+        if (web == null) return;
         focusWeb();
+        if (adminView == null && !web.hasFocus()) nfcError("Toetsaanslagen naar de pagina terwijl die de focus niet kreeg");
         KeyCharacterMap km = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD);
         KeyEvent[] evs = km.getEvents(text.toCharArray());
         if (evs != null) for (KeyEvent e : evs) web.dispatchKeyEvent(e);
         else web.dispatchKeyEvent(new KeyEvent(SystemClock.uptimeMillis(), text, KeyCharacterMap.VIRTUAL_KEYBOARD, 0));
         if (enter) {
-            web.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER));
-            web.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER));
+            // Met een echte tijd en het virtuele toetsenbord als bron, zoals de tekens hierboven (niet tijd 0)
+            long t = SystemClock.uptimeMillis();
+            web.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER, 0, 0, KeyCharacterMap.VIRTUAL_KEYBOARD, 0));
+            web.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER, 0, 0, KeyCharacterMap.VIRTUAL_KEYBOARD, 0));
         }
     }
 
