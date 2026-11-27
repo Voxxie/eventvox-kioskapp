@@ -1,0 +1,117 @@
+name: Release maken
+
+# Eén knop voor een nieuwe versie (Actions > Release maken > Run workflow, op main): het volgende versienummer (v0.0.23
+# wordt v0.0.24; na PATCH 99 de volgende MINOR), de notities van de gemergde PR's sinds de vorige versie (of eigen
+# tekst), de GitHub-release (gewoon of pre-release = testkanaal) en meteen de APK en update.json (release.yml).
+# Een release die een workflow met GITHUB_TOKEN maakt, start release.yml niet vanzelf: daarom roept deze hem aan.
+on:
+  workflow_dispatch:
+    inputs:
+      kanaal:
+        description: Stabiel (alle toestellen) of test (alleen update_channel=beta, als pre-release)
+        type: choice
+        options: [stabiel, test]
+        default: stabiel
+      stap:
+        description: Welk deel omhoog (patch 0.0.23 → 0.0.24, minor → 0.1.0, major → 1.0.0)
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      titel:
+        description: Korte titel (optioneel), bijvoorbeeld "Mobiel internet"
+        type: string
+        required: false
+      notities:
+        description: Eigen notities (optioneel; leeg = de gemergde PR's sinds de vorige versie)
+        type: string
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  create:
+    runs-on: ubuntu-24.04
+    # Alleen vanaf main: een release van een andere branch zou toestellen een versie geven die niet in main staat
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      notes: ${{ steps.notes.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Volgend versienummer
+        id: version
+        env:
+          STAP: ${{ inputs.stap }}
+        run: |
+          # De hoogste tag vMAJOR.MINOR.PATCH (nooit "beta"); geen tag: v0.0.0
+          LAST="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+          LAST="${LAST:-v0.0.0}"
+          IFS=. read -r MAJOR MINOR PATCH <<< "${LAST#v}"
+          case "$STAP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            *) PATCH=$((PATCH + 1)) ;;
+          esac
+          # MINOR en PATCH 0-99 (versionCode = MAJOR*10000 + MINOR*100 + PATCH, AGENTS.md)
+          if [ "$PATCH" -gt 99 ]; then PATCH=0; MINOR=$((MINOR + 1)); fi
+          if [ "$MINOR" -gt 99 ]; then MINOR=0; MAJOR=$((MAJOR + 1)); fi
+          TAG="v$MAJOR.$MINOR.$PATCH"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::Tag $TAG bestaat al"; exit 1
+          fi
+          echo "last=$LAST" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Vorige versie $LAST, nieuwe versie $TAG"
+
+      - name: Notities
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          LAST: ${{ steps.version.outputs.last }}
+          OWN: ${{ inputs.notities }}
+        run: |
+          if [ -n "$OWN" ]; then
+            NOTES="$OWN"
+          else
+            # Wat GitHub zelf maakt: de gemergde PR's sinds de vorige versie
+            ARGS=(-f tag_name="$TAG" -f target_commitish="$GITHUB_SHA")
+            [ "$LAST" != "v0.0.0" ] && ARGS+=(-f previous_tag_name="$LAST")
+            NOTES="$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" "${ARGS[@]}" --jq .body)"
+          fi
+          {
+            echo "notes<<EVX_NOTES_END"
+            echo "$NOTES"
+            echo "EVX_NOTES_END"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Release aanmaken
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          TITEL: ${{ inputs.titel }}
+          KANAAL: ${{ inputs.kanaal }}
+          NOTES: ${{ steps.notes.outputs.notes }}
+        run: |
+          TITLE="$TAG"
+          [ -n "$TITEL" ] && TITLE="$TAG - $TITEL"
+          FLAGS=()
+          [ "$KANAAL" = "test" ] && FLAGS+=(--prerelease)
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TITLE" --notes "$NOTES" "${FLAGS[@]}"
+          echo "Release $TITLE aangemaakt (${KANAAL})"
+
+  build:
+    needs: create
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.create.outputs.tag }}
+      notes: ${{ needs.create.outputs.notes }}
+    secrets: inherit

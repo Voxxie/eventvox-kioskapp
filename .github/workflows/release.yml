@@ -3,6 +3,8 @@ name: Release APK
 # Maakt bij elke gepubliceerde GitHub-release een ondertekende webkiosk.apk
 # en hangt die aan de release. Tag-formaat: v0.0.1 (of 0.0.1).
 # Handmatig starten (Actions > Release APK > Run workflow) maakt een test-build als artifact.
+# Ook aangeroepen door "Release maken" (new-release.yml, workflow_call met tag en notes): een release die een workflow
+# met GITHUB_TOKEN maakt, start deze workflow niet vanzelf, dus die roept hem zelf aan.
 
 on:
   release:
@@ -11,6 +13,17 @@ on:
 # daar over); test = de release "beta" (geen versie, pre-release), waar elke release, ook een pre-release, zijn
 # update.json bij zet (releases/download/beta/update.json). Toestellen kiezen met update_channel=stable|beta.
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: De tag van de release (vX.Y.Z), al aangemaakt
+        type: string
+        required: true
+      notes:
+        description: De release-notes (voor update.json)
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -20,6 +33,10 @@ jobs:
     runs-on: ubuntu-24.04
     # De rollende release "beta" zelf is geen versie
     if: github.event_name != 'release' || github.event.release.tag_name != 'beta'
+    env:
+      # De release: van het release-event, of van "Release maken" (workflow_call); leeg: een test-build
+      RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      RELEASE_NOTES: ${{ inputs.notes || github.event.release.body }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,7 +48,7 @@ jobs:
       - name: Versie bepalen
         id: version
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ env.RELEASE_TAG }}
         run: |
           if [ -n "$TAG" ]; then
             NAME="${TAG#v}"
@@ -74,10 +91,10 @@ jobs:
           (cd dist && zip -q "../webkiosk-${VERSION_NAME}.zip" * && sha256sum webkiosk.apk > webkiosk.apk.sha256)
 
       - name: update.json maken (voor automatische updates op de toestellen)
-        if: github.event_name == 'release'
+        if: env.RELEASE_TAG != ''
         env:
-          TAG: ${{ github.event.release.tag_name }}
-          NOTES: ${{ github.event.release.body }}
+          TAG: ${{ env.RELEASE_TAG }}
+          NOTES: ${{ env.RELEASE_NOTES }}
         run: |
           jq -n \
             --argjson code "${{ steps.version.outputs.code }}" \
@@ -89,10 +106,10 @@ jobs:
           cat dist/update.json
 
       - name: Aan release hangen
-        if: github.event_name == 'release'
+        if: env.RELEASE_TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ env.RELEASE_TAG }}
         run: |
           VERSION="${{ steps.version.outputs.name }}"
           cp dist/webkiosk.apk "dist/webkiosk-${VERSION}.apk"
@@ -100,7 +117,7 @@ jobs:
             dist/update.json "webkiosk-${VERSION}.zip" --clobber
 
       - name: Test-build bewaren
-        if: github.event_name != 'release'
+        if: env.RELEASE_TAG == ''
         uses: actions/upload-artifact@v4
         with:
           name: webkiosk-${{ steps.version.outputs.name }}
@@ -109,7 +126,7 @@ jobs:
             webkiosk-${{ steps.version.outputs.name }}.zip
 
       - name: Testkanaal bijwerken (release "beta")
-        if: github.event_name == 'release'
+        if: env.RELEASE_TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

@@ -50,6 +50,9 @@ De hulpklassen (`NetworkScreen`, `AdminScreen`, `FindMe`) krijgen de Activity me
 - **Nieuwere Android-API's**: aanroepen via reflectie of `Build.VERSION.SDK_INT`-controle. Moet een klasse uit een
   nieuwere API in een methodesignatuur staan (zoals `RenderProcessGoneDetail` voor `onRenderProcessGone`), zet dan een
   stub in `app/stubs/`: die staat alleen op het classpath, niet in de APK. Zo'n override krijgt **geen** `@Override`.
+- **Release maken** (één klik): Actions > *Release maken* (`new-release.yml`, alleen op `main`): volgend versienummer
+  (patch/minor/major, MINOR en PATCH tot 99), notities van GitHub (de gemergde PR's) of eigen tekst, de release (gewoon of
+  pre-release) en dan `release.yml` via `workflow_call` (een release van GITHUB_TOKEN start die niet vanzelf).
 - **Release** = GitHub-release met tag `vX.Y.Z` → `.github/workflows/release.yml` bouwt, ondertekent, hangt
   `webkiosk-<versie>.apk`, `webkiosk.apk`, `.sha256`, `update.json` en een zip (APK + scripts + config) aan de release,
   en werkt de rollende pre-release **`beta`** bij (het testkanaal; geen versie, niet installeren).

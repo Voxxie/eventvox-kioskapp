@@ -386,7 +386,15 @@ Keystore naar base64:
 
 Gebruik altijd **dezelfde** keystore: met een andere sleutel kan de app niet over bestaande installaties heen worden bijgewerkt.
 
-**Release maken:** Releases > *Draft a new release* > tag `v0.0.1` > *Publish*. Na ±1 minuut staat de APK bij de release.
+**Release maken (één klik):** Actions > **Release maken** > *Run workflow* (op `main`). Kies:
+- **kanaal**: *stabiel* (alle toestellen) of *test* (een pre-release: alleen toestellen op het testkanaal);
+- **stap**: *patch* (v0.0.23 → v0.0.24, standaard), *minor* (→ v0.1.0) of *major* (→ v1.0.0);
+- optioneel een korte **titel** en eigen **notities** (leeg: de gemergde PR's sinds de vorige versie).
+
+De workflow (`new-release.yml`) rekent het volgende versienummer uit, maakt de release en bouwt meteen de APK en
+`update.json` (via `release.yml`). Na ±2 minuten staat alles bij de release en halen de toestellen hem op.
+
+**Of met de hand:** Releases > *Draft a new release* > tag `v0.0.1` > *Publish*. Na ±1 minuut staat de APK bij de release.
 - Tag-formaat `vMAJOR.MINOR.PATCH` (MINOR en PATCH 0–99); versionCode wordt `MAJOR*10000 + MINOR*100 + PATCH`
   (v0.0.1 → 1, v0.1.0 → 100, v1.0.0 → 10000), dus elke nieuwe tag moet hoger zijn dan de vorige.
 - Een lokaal gebouwde APK (`./build.sh` zonder versie) heeft versie `0.0.0-dev` (versionCode 0): elke release is
